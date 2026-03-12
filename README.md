@@ -18,7 +18,7 @@ GitHub Pages에 그대로 배포할 수 있는 정적 프론트와 Supabase DB +
 ## 2. 현재 아키텍처 설명
 
 - 프론트 배포: GitHub Pages
-- 읽기 저장소: Supabase Database
+- 읽기 저장소: Supabase Database + Supabase Storage(public bucket)
 - 관리자 쓰기 경로: Supabase Edge Functions
 - 관리자 인증: Edge Function이 `ADMIN_PASSWORD` 서버측 secret과 비교
 - 관리자 세션: 24시간 유효한 서명 토큰을 `localStorage`에 저장
@@ -34,6 +34,8 @@ GitHub Pages (index.html / admin.html)
 
 Supabase
   -> teams / matches 테이블
+  -> league_assets 테이블
+  -> league-assets Storage bucket
   -> RLS 활성화
   -> anon select 허용
   -> direct write 차단
@@ -48,6 +50,7 @@ Supabase
 - 서비스 제목 / 설명
 - 진행 현황 카드
 - 경기 교차표
+- 대진 순서 이미지
 - 순위표
 - 수정 UI 미노출
 
@@ -60,6 +63,7 @@ Supabase
   - 팀 삭제(경기 생성 전까지만)
   - 경기 생성
   - 경기 결과 입력 / 수정 / 초기화
+  - 대진 순서 이미지 업로드 / 삭제
   - 전체 데이터 초기화
   - 진행 현황 / 경기 교차표 / 순위표
   - 로그아웃
@@ -127,11 +131,12 @@ window.__APP_CONFIG__ = {
 
 1. Supabase Dashboard에서 `SQL Editor`를 엽니다.
 2. 이 저장소의 [schema.sql](/mnt/c/Users/USER/Desktop/FE/30s_Leaderboard/supabase/schema.sql) 내용을 붙여 넣습니다.
-3. 실행 후 `teams`, `matches` 테이블과 정책이 생성됐는지 확인합니다.
+3. 실행 후 `teams`, `matches`, `league_assets` 테이블과 `league-assets` 버킷이 생성됐는지 확인합니다.
 
 `schema.sql`에는 아래 내용이 포함되어 있습니다.
 
 - 테이블 생성 SQL
+- Storage bucket 생성 SQL
 - 제약조건
 - 인덱스
 - RLS 활성화
@@ -188,6 +193,10 @@ supabase functions deploy admin-api
 - `add_team`
 - `remove_team`
 - `generate_matches`
+- `create_league_asset_upload`
+- `update_league_asset_image`
+- `remove_league_asset_image`
+- `cleanup_league_asset_image`
 - `update_match`
 - `clear_match`
 - `reset_data`
@@ -214,6 +223,7 @@ supabase functions deploy admin-api
 읽기:
 
 - `index.html`과 `admin.html` 모두 anon key로 `teams`, `matches` 조회 가능
+- 대진 순서 이미지는 public bucket URL로 조회 가능
 
 쓰기:
 
@@ -221,6 +231,7 @@ supabase functions deploy admin-api
 - 팀 추가 / 삭제
 - 경기 생성
 - 경기 결과 저장 / 수정 / 초기화
+- 대진 순서 이미지 업로드 / 삭제
 - 전체 초기화
 
 위 쓰기 작업은 모두 `admin-api` Edge Function에서 service role로 수행합니다.

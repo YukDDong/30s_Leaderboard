@@ -195,6 +195,64 @@
           </div>
         </section>
 
+        <section
+          class="panel wide-panel"
+          aria-labelledby="league-image-heading"
+        >
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Asset</p>
+              <h2 id="league-image-heading">대진 순서 이미지</h2>
+            </div>
+          </div>
+
+          <form id="leagueImageForm" class="asset-panel-form" novalidate>
+            <label class="input-group">
+              <span>이미지 파일</span>
+              <input
+                id="leagueImageInput"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+              />
+            </label>
+
+            <div class="asset-image-preview-card">
+              <img
+                id="leagueImagePreview"
+                class="asset-image-preview"
+                alt="대진 순서 이미지 미리보기"
+                hidden
+              />
+              <p id="leagueImageEmpty" class="helper-text">
+                아직 등록된 대진 순서 이미지가 없습니다.
+              </p>
+              <p id="leagueImageMeta" class="asset-image-meta"></p>
+            </div>
+
+            <div class="asset-panel-actions">
+              <button
+                id="saveLeagueImageButton"
+                class="primary-button"
+                type="submit"
+              >
+                이미지 저장
+              </button>
+              <button
+                id="removeLeagueImageButton"
+                class="secondary-button"
+                type="button"
+              >
+                이미지 삭제
+              </button>
+            </div>
+          </form>
+          <p
+            id="leagueImageMessage"
+            class="inline-message"
+            aria-live="polite"
+          ></p>
+        </section>
+
         <section class="panel danger-panel" aria-labelledby="reset-heading">
           <div class="section-header">
             <div>

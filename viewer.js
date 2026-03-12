@@ -15,6 +15,7 @@ import {
 const state = {
   teams: [],
   matches: [],
+  leagueAsset: null,
 };
 
 const elements = {
@@ -23,6 +24,8 @@ const elements = {
   summaryCards: document.getElementById("summaryCards"),
   matchesContainer: document.getElementById("matchesContainer"),
   matchesMessage: document.getElementById("matchesMessage"),
+  leagueImage: document.getElementById("leagueImage"),
+  leagueImageEmpty: document.getElementById("leagueImageEmpty"),
   standingsBody: document.getElementById("standingsBody"),
 };
 
@@ -44,10 +47,11 @@ async function initializeViewerPage() {
   setMessage(elements.matchesMessage, "Supabase에서 최신 리그 데이터를 불러오는 중입니다.", "warning");
 
   try {
-    const { teams, matches } = await fetchLeagueData();
+    const { teams, matches, leagueAsset } = await fetchLeagueData();
     const normalized = normalizeLeagueData(teams, matches);
     state.teams = normalized.teams;
     state.matches = normalized.matches;
+    state.leagueAsset = leagueAsset;
     renderPage();
     clearMessage(elements.matchesMessage);
   } catch (error) {
@@ -66,5 +70,20 @@ function renderPage() {
     editable: false,
     pendingLabel: "-",
   });
+  renderLeagueImage();
   renderStandings(elements.standingsBody, state.teams, state.matches);
+}
+
+function renderLeagueImage() {
+  const imageUrl = state.leagueAsset?.imageUrl || "";
+
+  elements.leagueImage.hidden = !imageUrl;
+  elements.leagueImageEmpty.hidden = Boolean(imageUrl);
+
+  if (!imageUrl) {
+    elements.leagueImage.removeAttribute("src");
+    return;
+  }
+
+  elements.leagueImage.src = imageUrl;
 }

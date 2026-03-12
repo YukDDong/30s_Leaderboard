@@ -50,17 +50,6 @@
           <div id="summaryCards" class="summary-grid"></div>
         </section>
 
-        <section class="panel wide-panel" aria-labelledby="matches-heading">
-          <div class="section-header">
-            <div>
-              <p class="section-kicker">Matches</p>
-              <h2 id="matches-heading">경기 목록</h2>
-            </div>
-          </div>
-          <div id="matchesContainer" class="matches-table-shell"></div>
-          <p id="matchesMessage" class="inline-message" aria-live="polite"></p>
-        </section>
-
         <section class="panel wide-panel" aria-labelledby="standings-heading">
           <div class="section-header">
             <div>
@@ -86,6 +75,41 @@
               </thead>
               <tbody id="standingsBody"></tbody>
             </table>
+          </div>
+        </section>
+
+        <section class="panel wide-panel" aria-labelledby="matches-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Matches</p>
+              <h2 id="matches-heading">경기 목록</h2>
+            </div>
+          </div>
+          <div id="matchesContainer" class="matches-table-shell"></div>
+          <p id="matchesMessage" class="inline-message" aria-live="polite"></p>
+        </section>
+
+        <section
+          id="leagueImageSection"
+          class="panel wide-panel"
+          aria-labelledby="match-order-image-heading"
+        >
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Photos</p>
+              <h2 id="match-order-image-heading">대진 순서 이미지</h2>
+            </div>
+          </div>
+          <div class="league-image-frame">
+            <img
+              id="leagueImage"
+              class="league-image"
+              alt="대진 순서 이미지"
+              hidden
+            />
+            <p id="leagueImageEmpty" class="helper-text">
+              아직 등록된 대진 순서 이미지가 없습니다.
+            </p>
           </div>
         </section>
       </main>

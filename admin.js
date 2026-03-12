@@ -12,9 +12,12 @@ import {
 } from "./app.js";
 import {
   callAdminFunction,
+  cleanupUploadedLeagueAssetImage,
   fetchLeagueData,
   getMissingConfigKeys,
   isSupabaseConfigured,
+  uploadLeagueAssetImage,
+  validateLeagueImageFile,
   verifyAdminPassword,
 } from "./supabase-client.js";
 
@@ -26,10 +29,12 @@ const SESSION_KEYS = {
 const state = {
   teams: [],
   matches: [],
+  leagueAsset: null,
   selectedMatchId: null,
   isModalOpen: false,
   lastFocusedElement: null,
   loading: false,
+  pendingLeagueImagePreviewUrl: "",
 };
 
 const elements = {
@@ -44,6 +49,14 @@ const elements = {
   logoutButton: document.getElementById("logoutButton"),
   adminWorkspace: document.getElementById("adminWorkspace"),
   adminStatusMessage: document.getElementById("adminStatusMessage"),
+  leagueImageForm: document.getElementById("leagueImageForm"),
+  leagueImageInput: document.getElementById("leagueImageInput"),
+  saveLeagueImageButton: document.getElementById("saveLeagueImageButton"),
+  removeLeagueImageButton: document.getElementById("removeLeagueImageButton"),
+  leagueImagePreview: document.getElementById("leagueImagePreview"),
+  leagueImageEmpty: document.getElementById("leagueImageEmpty"),
+  leagueImageMeta: document.getElementById("leagueImageMeta"),
+  leagueImageMessage: document.getElementById("leagueImageMessage"),
   teamForm: document.getElementById("teamForm"),
   teamNameInput: document.getElementById("teamNameInput"),
   addTeamButton: document.getElementById("addTeamButton"),
@@ -100,6 +113,9 @@ function initializeAdminPage() {
 function bindEvents() {
   elements.authForm.addEventListener("submit", handlePasswordSubmit);
   elements.logoutButton.addEventListener("click", handleLogout);
+  elements.leagueImageForm.addEventListener("submit", handleLeagueImageSave);
+  elements.leagueImageInput.addEventListener("change", handleLeagueImageChange);
+  elements.removeLeagueImageButton.addEventListener("click", handleRemoveLeagueImage);
   elements.teamForm.addEventListener("submit", handleAddTeam);
   elements.teamsContainer.addEventListener("click", handleRemoveTeam);
   elements.generateMatchesButton.addEventListener("click", handleGenerateMatches);
@@ -163,10 +179,11 @@ async function hydrateAdminPage(statusMessage = "") {
   setBusy(true, "Supabase에서 최신 리그 데이터를 불러오는 중입니다.");
 
   try {
-    const { teams, matches } = await fetchLeagueData();
+    const { teams, matches, leagueAsset } = await fetchLeagueData();
     const normalized = normalizeLeagueData(teams, matches);
     state.teams = normalized.teams;
     state.matches = normalized.matches;
+    state.leagueAsset = leagueAsset;
     renderAdminWorkspace();
 
     if (statusMessage) {
@@ -206,6 +223,7 @@ async function restoreAdminSession() {
 
 function renderAdminWorkspace() {
   renderSummary(elements.summaryCards, state.teams, state.matches);
+  renderLeagueImagePanel();
   renderTeams(elements.teamsContainer, state.teams, {
     showRemoveButton: true,
     disableRemoveButton: state.matches.length > 0 || state.loading,
@@ -217,6 +235,40 @@ function renderAdminWorkspace() {
   updateButtonStates();
 }
 
+function renderLeagueImagePanel(selectedFile = null) {
+  const previewUrl = selectedFile
+    ? URL.createObjectURL(selectedFile)
+    : state.leagueAsset?.imageUrl || "";
+  const hasPreview = Boolean(previewUrl);
+
+  revokePendingLeagueImagePreview();
+
+  if (selectedFile) {
+    state.pendingLeagueImagePreviewUrl = previewUrl;
+  }
+
+  elements.leagueImagePreview.hidden = !hasPreview;
+  elements.leagueImageEmpty.hidden = hasPreview;
+
+  if (hasPreview) {
+    elements.leagueImagePreview.src = previewUrl;
+  } else {
+    elements.leagueImagePreview.removeAttribute("src");
+  }
+
+  if (selectedFile) {
+    elements.leagueImageMeta.textContent = `${selectedFile.name} (${formatFileSize(selectedFile.size)})`;
+    return;
+  }
+
+  if (state.leagueAsset?.imagePath) {
+    elements.leagueImageMeta.textContent = "현재 저장된 대진 순서 이미지";
+    return;
+  }
+
+  elements.leagueImageMeta.textContent = "";
+}
+
 function updateButtonStates() {
   const isLocked = !isAdminSessionValid();
   const configMissing = !isSupabaseConfigured();
@@ -225,11 +277,133 @@ function updateButtonStates() {
   elements.authButton.disabled = state.loading || configMissing;
   elements.passwordInput.disabled = state.loading || configMissing;
   elements.logoutButton.disabled = state.loading || isLocked;
+  elements.leagueImageInput.disabled = state.loading || isLocked;
+  elements.saveLeagueImageButton.disabled = state.loading || isLocked;
+  elements.removeLeagueImageButton.disabled =
+    state.loading || isLocked || !state.leagueAsset?.imagePath;
   elements.addTeamButton.disabled = state.loading || isLocked || matchesExist;
   elements.teamNameInput.disabled = state.loading || isLocked || matchesExist;
   elements.generateMatchesButton.disabled =
     state.loading || isLocked || state.teams.length < 2 || matchesExist;
   elements.resetButton.disabled = state.loading || isLocked;
+}
+
+function handleLeagueImageChange(event) {
+  const file = event.target.files?.[0] || null;
+  clearMessage(elements.leagueImageMessage);
+
+  if (!file) {
+    renderLeagueImagePanel();
+    return;
+  }
+
+  const validationMessage = validateLeagueImageFile(file);
+
+  if (validationMessage) {
+    elements.leagueImageInput.value = "";
+    renderLeagueImagePanel();
+    setMessage(elements.leagueImageMessage, validationMessage, "danger");
+    return;
+  }
+
+  renderLeagueImagePanel(file);
+}
+
+async function handleLeagueImageSave(event) {
+  event.preventDefault();
+  clearMessage(elements.resetMessage);
+  clearMessage(elements.leagueImageMessage);
+
+  const selectedFile = elements.leagueImageInput.files?.[0] || null;
+
+  if (!selectedFile) {
+    setMessage(elements.leagueImageMessage, "업로드할 이미지를 먼저 선택해 주세요.", "warning");
+    return;
+  }
+
+  const validationMessage = validateLeagueImageFile(selectedFile);
+
+  if (validationMessage) {
+    setMessage(elements.leagueImageMessage, validationMessage, "danger");
+    return;
+  }
+
+  const session = loadAdminSession();
+  const previousImagePath = state.leagueAsset?.imagePath || "";
+  let uploadedImagePath = "";
+
+  try {
+    const uploadedImage = await uploadLeagueAssetImage(selectedFile, session.token);
+    uploadedImagePath = uploadedImage.path;
+  } catch (error) {
+    setMessage(
+      elements.leagueImageMessage,
+      error.message || "대진 순서 이미지 업로드 중 오류가 발생했습니다.",
+      "danger"
+    );
+    return;
+  }
+
+  const result = await runAdminAction("update_league_asset_image", {
+    imagePath: uploadedImagePath,
+  });
+
+  if (!result.ok) {
+    if (uploadedImagePath && uploadedImagePath !== previousImagePath) {
+      void cleanupUploadedLeagueAssetImage(uploadedImagePath, session.token).catch(() => {});
+    }
+
+    setMessage(
+      elements.leagueImageMessage,
+      result.message || "대진 순서 이미지 저장 중 오류가 발생했습니다.",
+      result.tone || "danger"
+    );
+    return;
+  }
+
+  elements.leagueImageInput.value = "";
+  setMessage(
+    elements.leagueImageMessage,
+    result.message || "대진 순서 이미지를 저장했습니다.",
+    "success"
+  );
+}
+
+async function handleRemoveLeagueImage() {
+  clearMessage(elements.resetMessage);
+  clearMessage(elements.leagueImageMessage);
+
+  if (!state.leagueAsset?.imagePath) {
+    setMessage(elements.leagueImageMessage, "삭제할 대진 순서 이미지가 없습니다.", "warning");
+    return;
+  }
+
+  const result = await runAdminAction("remove_league_asset_image");
+
+  if (!result.ok) {
+    setMessage(
+      elements.leagueImageMessage,
+      result.message || "대진 순서 이미지 삭제 중 오류가 발생했습니다.",
+      result.tone || "danger"
+    );
+    return;
+  }
+
+  elements.leagueImageInput.value = "";
+  setMessage(
+    elements.leagueImageMessage,
+    result.message || "대진 순서 이미지를 삭제했습니다.",
+    "success"
+  );
+}
+
+function revokePendingLeagueImagePreview() {
+  if (!state.pendingLeagueImagePreviewUrl) {
+    return;
+  }
+
+  URL.revokeObjectURL(state.pendingLeagueImagePreviewUrl);
+  state.pendingLeagueImagePreviewUrl = "";
 }
 
 async function handleAddTeam(event) {
@@ -457,7 +631,7 @@ async function handleMatchClear() {
 
 async function handleResetData() {
   const shouldReset = window.confirm(
-    "Supabase에 저장된 팀 목록과 경기 기록을 모두 삭제하고 처음 상태로 되돌릴까요? 이 작업은 되돌릴 수 없습니다."
+    "Supabase에 저장된 팀 목록, 경기 기록, 대진 순서 이미지를 모두 삭제하고 처음 상태로 되돌릴까요? 이 작업은 되돌릴 수 없습니다."
   );
 
   if (!shouldReset) {
@@ -480,9 +654,11 @@ async function handleResetData() {
     closeMatchModal({ restoreFocus: false });
   }
 
+  elements.leagueImageInput.value = "";
   clearMessage(elements.teamMessage);
   clearMessage(elements.matchGenerationMessage);
   clearMessage(elements.matchesMessage);
+  clearMessage(elements.leagueImageMessage);
   setMessage(elements.resetMessage, result.message || "모든 데이터를 초기화했습니다.", "success");
 }
 
@@ -521,9 +697,12 @@ async function runAdminAction(action, payload = {}) {
 
 function handleLogout() {
   clearAdminSession();
+  revokePendingLeagueImagePreview();
+
   if (state.isModalOpen) {
     closeMatchModal({ restoreFocus: false });
   }
+
   clearMessage(elements.adminStatusMessage);
   setMessage(elements.authMessage, "로그아웃되었습니다. 다시 비밀번호를 입력해 주세요.", "warning");
   lockAdmin();
@@ -600,4 +779,20 @@ function expireAdminSession(message) {
   clearAdminSession();
   lockAdmin();
   setMessage(elements.authMessage, message, "warning");
+}
+
+function formatFileSize(sizeInBytes) {
+  if (!Number.isFinite(sizeInBytes) || sizeInBytes <= 0) {
+    return "0B";
+  }
+
+  if (sizeInBytes >= 1024 * 1024) {
+    return `${(sizeInBytes / (1024 * 1024)).toFixed(1)}MB`;
+  }
+
+  if (sizeInBytes >= 1024) {
+    return `${Math.round(sizeInBytes / 1024)}KB`;
+  }
+
+  return `${sizeInBytes}B`;
 }
