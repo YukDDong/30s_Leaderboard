@@ -150,29 +150,10 @@ function bindEvents() {
   });
 
   elements.matchesContainer.addEventListener("click", (event) => {
-    const row = event.target.closest("tr[data-match-id]");
     const button = event.target.closest("button[data-open-match-id]");
 
     if (button) {
       openMatchModal(button.dataset.openMatchId, button);
-      return;
-    }
-
-    if (row) {
-      openMatchModal(row.dataset.matchId, row);
-    }
-  });
-
-  elements.matchesContainer.addEventListener("keydown", (event) => {
-    const row = event.target.closest("tr[data-match-id]");
-
-    if (!row) {
-      return;
-    }
-
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      openMatchModal(row.dataset.matchId, row);
     }
   });
 
@@ -423,22 +404,22 @@ function renderSummary() {
     {
       label: "총 팀 수",
       value: state.teams.length,
-      note: "현재 등록된 리그 참가 팀 수",
+      note: "",
     },
     {
       label: "총 경기 수",
       value: totalMatches,
-      note: totalMatches > 0 ? "단일 풀리그 기준 전체 경기 수" : "아직 생성된 일정이 없습니다",
+      note: "",
     },
     {
       label: "입력 완료 경기 수",
       value: playedMatches,
-      note: playedMatches > 0 ? "점수가 저장된 경기 수" : "아직 저장된 결과가 없습니다",
+      note: "",
     },
     {
       label: "남은 경기 수",
       value: remainingMatches,
-      note: totalMatches > 0 ? "아직 점수를 입력하지 않은 경기 수" : "팀 등록 후 경기 생성이 필요합니다",
+      note: "",
     },
   ];
 
@@ -482,29 +463,33 @@ function renderTeams() {
     return;
   }
 
-  state.teams.forEach((team) => {
+  state.teams.forEach((team, index) => {
     const teamItem = document.createElement("article");
     teamItem.className = "team-item";
 
     const meta = document.createElement("div");
     meta.className = "team-meta";
 
+    const head = document.createElement("div");
+    head.className = "team-head";
+
+    const badge = document.createElement("span");
+    badge.className = "team-index-chip";
+    badge.textContent = String(index + 1);
+
     const name = document.createElement("strong");
     name.className = "team-name";
     name.textContent = team;
-
-    const note = document.createElement("span");
-    note.className = "team-note";
-    note.textContent = matchesExist ? "경기 일정 생성 완료: 삭제 잠금" : "경기 생성 전: 삭제 가능";
 
     const removeButton = document.createElement("button");
     removeButton.className = "secondary-button";
     removeButton.type = "button";
     removeButton.dataset.team = team;
-    removeButton.textContent = "팀 삭제";
+    removeButton.textContent = "삭제";
     removeButton.disabled = matchesExist;
 
-    meta.append(name, note);
+    head.append(badge, name);
+    meta.append(head);
     teamItem.append(meta, removeButton);
     elements.teamsContainer.appendChild(teamItem);
   });
@@ -524,52 +509,108 @@ function renderMatches() {
   }
 
   const tableWrap = document.createElement("div");
-  tableWrap.className = "table-wrap";
+  tableWrap.className = "table-wrap matrix-table-wrap";
 
   const table = document.createElement("table");
-  table.className = "matches-table";
-  table.innerHTML = `
-    <caption class="sr-only">경기 목록 표. 각 행을 클릭하면 점수 입력 또는 수정 모달이 열립니다.</caption>
-    <thead>
-      <tr>
-        <th>번호</th>
-        <th>팀 A</th>
-        <th>팀 B</th>
-        <th>현재 스코어</th>
-        <th>상태</th>
-        <th>입력</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
+  table.className = "matches-table matrix-table";
+
+  const caption = document.createElement("caption");
+  caption.className = "sr-only";
+  caption.textContent = "팀 간 대진 교차표입니다. 같은 팀 대각선은 비활성화되고, 클릭 가능한 셀에서 점수 입력 또는 수정 모달이 열립니다.";
+
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  const cornerCell = document.createElement("th");
+  cornerCell.className = "matrix-corner";
+  cornerCell.scope = "col";
+  cornerCell.innerHTML = `
+    <span class="matrix-corner-label">대진표</span>
+    <span class="matrix-corner-note">행 팀 vs 열 팀</span>
   `;
+  headRow.appendChild(cornerCell);
 
-  const tbody = table.querySelector("tbody");
-
-  state.matches.forEach((match, index) => {
-    const row = document.createElement("tr");
-    row.className = `clickable-row ${match.isPlayed ? "match-row-played" : "match-row-pending"}`;
-    row.dataset.matchId = match.id;
-    row.tabIndex = 0;
-    row.setAttribute("role", "button");
-    row.setAttribute("aria-label", `${index + 1}경기 ${match.teamA} 대 ${match.teamB} 점수 ${formatMatchScore(match)} 편집 열기`);
-
-    const statusClass = match.isPlayed ? "played" : "pending";
-    const actionLabel = match.isPlayed ? "수정" : "입력";
-
-    row.innerHTML = `
-      <td>${index + 1}</td>
-      <td>${escapeHtml(match.teamA)}</td>
-      <td>${escapeHtml(match.teamB)}</td>
-      <td class="match-score-cell">${escapeHtml(formatMatchScore(match))}</td>
-      <td><span class="match-badge ${statusClass}">${match.isPlayed ? "입력 완료" : "미입력"}</span></td>
-      <td>
-        <button class="table-action-button" type="button" data-open-match-id="${match.id}">${actionLabel}</button>
-      </td>
+  state.teams.forEach((team, index) => {
+    const headCell = document.createElement("th");
+    headCell.scope = "col";
+    headCell.className = "matrix-team-head";
+    headCell.innerHTML = `
+      <span class="team-index-badge">${index + 1}</span>
+      <span class="matrix-team-name" title="${escapeHtml(team)}">${escapeHtml(team)}</span>
     `;
+    headRow.appendChild(headCell);
+  });
+
+  thead.appendChild(headRow);
+  table.append(caption, thead);
+
+  const tbody = document.createElement("tbody");
+
+  state.teams.forEach((rowTeam, rowIndex) => {
+    const row = document.createElement("tr");
+
+    const sideHead = document.createElement("th");
+    sideHead.scope = "row";
+    sideHead.className = "matrix-side-head";
+    sideHead.innerHTML = `
+      <span class="team-index-badge">${rowIndex + 1}</span>
+      <span class="matrix-team-name" title="${escapeHtml(rowTeam)}">${escapeHtml(rowTeam)}</span>
+    `;
+    row.appendChild(sideHead);
+
+    state.teams.forEach((columnTeam, columnIndex) => {
+      const cell = document.createElement("td");
+
+      if (rowIndex === columnIndex) {
+        cell.className = "matrix-diagonal";
+        cell.setAttribute("aria-hidden", "true");
+        row.appendChild(cell);
+        return;
+      }
+
+      const match = findMatchByTeams(rowTeam, columnTeam);
+
+      if (!match) {
+        cell.className = "matrix-muted";
+        row.appendChild(cell);
+        return;
+      }
+
+      const outcomeClass = getMatchOutcomeForTeam(match, rowTeam);
+
+      if (columnIndex < rowIndex) {
+        cell.className = `matrix-match-cell readonly ${outcomeClass}`;
+        cell.innerHTML = `
+          <div class="matrix-cell-display ${outcomeClass}">
+            <span class="matrix-cell-score">${escapeHtml(formatMatchScoreForTeams(match, rowTeam, columnTeam))}</span>
+            <span class="matrix-cell-state">${getOutcomeLabel(match, rowTeam)}</span>
+          </div>
+        `;
+        row.appendChild(cell);
+        return;
+      }
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `matrix-cell-button ${outcomeClass}`;
+      button.dataset.openMatchId = match.id;
+      button.setAttribute(
+        "aria-label",
+        `${rowTeam} 대 ${columnTeam} 경기 ${match.isPlayed ? `${formatMatchScoreForTeams(match, rowTeam, columnTeam)} 수정` : "점수 입력"}`
+      );
+      button.innerHTML = `
+        <span class="matrix-cell-score">${escapeHtml(formatMatchScoreForTeams(match, rowTeam, columnTeam))}</span>
+        <span class="matrix-cell-state">${getOutcomeLabel(match, rowTeam)}</span>
+      `;
+
+      cell.className = `matrix-match-cell ${outcomeClass}`;
+      cell.appendChild(button);
+      row.appendChild(cell);
+    });
 
     tbody.appendChild(row);
   });
 
+  table.appendChild(tbody);
   tableWrap.appendChild(table);
   elements.matchesContainer.appendChild(tableWrap);
 }
@@ -752,6 +793,14 @@ function findMatchById(matchId) {
   return state.matches.find((item) => item.id === matchId) || null;
 }
 
+function findMatchByTeams(teamA, teamB) {
+  return state.matches.find(
+    (match) =>
+      (match.teamA === teamA && match.teamB === teamB) ||
+      (match.teamA === teamB && match.teamB === teamA)
+  ) || null;
+}
+
 function createMatchId(teamA, teamB, index) {
   const safeTeamA = sanitizeForId(teamA);
   const safeTeamB = sanitizeForId(teamB);
@@ -789,6 +838,55 @@ function normalizeScore(value) {
 
 function formatMatchScore(match) {
   return match.isPlayed ? `${match.scoreA} : ${match.scoreB}` : "-";
+}
+
+function formatMatchScoreForTeams(match, leftTeam, rightTeam) {
+  if (!match.isPlayed) {
+    return "입력";
+  }
+
+  if (match.teamA === leftTeam && match.teamB === rightTeam) {
+    return `${match.scoreA} : ${match.scoreB}`;
+  }
+
+  return `${match.scoreB} : ${match.scoreA}`;
+}
+
+function getMatchOutcomeForTeam(match, team) {
+  if (!match.isPlayed) {
+    return "pending";
+  }
+
+  const teamScore = match.teamA === team ? match.scoreA : match.scoreB;
+  const opponentScore = match.teamA === team ? match.scoreB : match.scoreA;
+
+  if (teamScore > opponentScore) {
+    return "win";
+  }
+
+  if (teamScore < opponentScore) {
+    return "loss";
+  }
+
+  return "draw";
+}
+
+function getOutcomeLabel(match, team) {
+  const outcome = getMatchOutcomeForTeam(match, team);
+
+  if (outcome === "win") {
+    return "승";
+  }
+
+  if (outcome === "loss") {
+    return "패";
+  }
+
+  if (outcome === "draw") {
+    return "무";
+  }
+
+  return "입력";
 }
 
 function formatScoreValue(score) {
