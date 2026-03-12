@@ -6,7 +6,7 @@
     <title>Tennis League Board</title>
     <meta
       name="description"
-      content="Supabase 기반 보기 전용 테니스 리그 대시보드에서 경기 현황과 순위표를 확인할 수 있습니다."
+      content="보기 전용 테니스 리그 대시보드에서 경기 현황과 순위표를 확인할 수 있습니다."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,30 +18,17 @@
   </head>
   <body>
     <div class="page-shell">
-      <header class="hero-card">
+      <header class="hero-card viewer-hero-card">
         <div class="hero-copy">
           <p class="eyebrow">Tennis League Dashboard</p>
           <h1>써티즈 리그 순위표</h1>
-          <p class="hero-description">
-            보기 전용 페이지입니다. Supabase에 저장된 팀, 경기 진행 현황,
-            순위표를 한 화면에서 확인할 수 있습니다.
-          </p>
+          <p class="hero-description">보기 전용 페이지입니다.</p>
         </div>
-
-        <aside class="hero-aside">
-          <div>
-            <span class="hero-badge">Viewer Mode</span>
-            <p>
-              경기 결과 수정, 팀 등록, 데이터 초기화는 관리자 페이지에서만
-              가능합니다.
-            </p>
-          </div>
-          <div class="hero-actions">
-            <a class="secondary-button button-link" href="./admin.html"
-              >관리자 페이지</a
-            >
-          </div>
-        </aside>
+        <div class="viewer-hero-toolbar">
+          <a class="secondary-button button-link" href="./admin.html"
+            >관리자 페이지</a
+          >
+        </div>
       </header>
 
       <section
@@ -93,13 +80,13 @@
                   <th>순위</th>
                   <th>팀명</th>
                   <th>경기수</th>
+                  <th>승점</th>
                   <th>승</th>
                   <th>무</th>
                   <th>패</th>
                   <th>득점</th>
                   <th>실점</th>
                   <th>득실차</th>
-                  <th>승점</th>
                 </tr>
               </thead>
               <tbody id="standingsBody"></tbody>

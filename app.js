@@ -200,7 +200,7 @@ export function renderMatches(
   container,
   teams,
   matches,
-  { editable = false } = {}
+  { editable = false, pendingLabel = "입력" } = {}
 ) {
   container.innerHTML = "";
 
@@ -291,9 +291,9 @@ export function renderMatches(
         cell.innerHTML = `
           <div class="matrix-cell-display ${outcomeClass}">
             <span class="matrix-cell-score">${escapeHtml(
-              formatMatchScoreForTeams(match, rowTeam.id, columnTeam.id)
+              formatMatchScoreForTeams(match, rowTeam.id, columnTeam.id, pendingLabel)
             )}</span>
-            <span class="matrix-cell-state">${getOutcomeLabel(match, rowTeam.id)}</span>
+            <span class="matrix-cell-state">${getOutcomeLabel(match, rowTeam.id, pendingLabel)}</span>
           </div>
         `;
         row.appendChild(cell);
@@ -314,9 +314,9 @@ export function renderMatches(
       );
       button.innerHTML = `
         <span class="matrix-cell-score">${escapeHtml(
-          formatMatchScoreForTeams(match, rowTeam.id, columnTeam.id)
+          formatMatchScoreForTeams(match, rowTeam.id, columnTeam.id, pendingLabel)
         )}</span>
-        <span class="matrix-cell-state">${getOutcomeLabel(match, rowTeam.id)}</span>
+        <span class="matrix-cell-state">${getOutcomeLabel(match, rowTeam.id, pendingLabel)}</span>
       `;
 
       cell.className = `matrix-match-cell ${outcomeClass}`;
@@ -350,13 +350,13 @@ export function renderStandings(tbody, teams, matches) {
       <td>${index + 1}</td>
       <td>${escapeHtml(teamStats.team)}</td>
       <td>${teamStats.played}</td>
+      <td>${teamStats.points}</td>
       <td>${teamStats.wins}</td>
       <td>${teamStats.draws}</td>
       <td>${teamStats.losses}</td>
       <td>${teamStats.goalsFor}</td>
       <td>${teamStats.goalsAgainst}</td>
       <td>${teamStats.goalDiff}</td>
-      <td>${teamStats.points}</td>
     `;
     tbody.appendChild(row);
   });
@@ -464,9 +464,9 @@ function compareTeams(a, b) {
   return a.id.localeCompare(b.id, "en");
 }
 
-function formatMatchScoreForTeams(match, leftTeamId, rightTeamId) {
+function formatMatchScoreForTeams(match, leftTeamId, rightTeamId, pendingLabel = "입력") {
   if (!match.isPlayed) {
-    return "입력";
+    return pendingLabel;
   }
 
   if (match.teamAId === leftTeamId && match.teamBId === rightTeamId) {
@@ -495,7 +495,7 @@ function getMatchOutcomeForTeam(match, teamId) {
   return "draw";
 }
 
-function getOutcomeLabel(match, teamId) {
+function getOutcomeLabel(match, teamId, pendingLabel = "입력") {
   const outcome = getMatchOutcomeForTeam(match, teamId);
 
   if (outcome === "win") {
@@ -510,5 +510,5 @@ function getOutcomeLabel(match, teamId) {
     return "무";
   }
 
-  return "입력";
+  return pendingLabel;
 }

@@ -33,6 +33,7 @@ const state = {
 };
 
 const elements = {
+  adminHeader: document.getElementById("adminHeader"),
   configNotice: document.getElementById("configNotice"),
   configNoticeMessage: document.getElementById("configNoticeMessage"),
   authPanel: document.getElementById("authPanel"),
@@ -89,8 +90,7 @@ function initializeAdminPage() {
   }
 
   if (isAdminSessionValid()) {
-    unlockAdmin();
-    void hydrateAdminPage("이전 관리자 세션을 복원했습니다.");
+    void restoreAdminSession();
     return;
   }
 
@@ -181,6 +181,24 @@ async function hydrateAdminPage(statusMessage = "") {
       error.message || "리그 데이터를 불러오지 못했습니다. Supabase 설정과 네트워크 상태를 확인해 주세요.",
       "danger"
     );
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function restoreAdminSession() {
+  lockAdmin();
+  setBusy(true);
+  setMessage(elements.authMessage, "이전 관리자 세션을 확인하는 중입니다.", "warning");
+
+  try {
+    const session = loadAdminSession();
+    await callAdminFunction("session_status", {}, session.token);
+    unlockAdmin();
+    clearMessage(elements.authMessage);
+    await hydrateAdminPage("이전 관리자 세션을 복원했습니다.");
+  } catch (error) {
+    expireAdminSession("관리자 세션이 만료되었거나 유효하지 않습니다. 다시 비밀번호를 입력해 주세요.");
   } finally {
     setBusy(false);
   }
@@ -512,12 +530,14 @@ function handleLogout() {
 }
 
 function lockAdmin() {
+  elements.adminHeader.hidden = true;
   elements.authPanel.hidden = false;
   elements.adminWorkspace.hidden = true;
   updateButtonStates();
 }
 
 function unlockAdmin() {
+  elements.adminHeader.hidden = false;
   elements.authPanel.hidden = true;
   elements.adminWorkspace.hidden = false;
   renderAdminWorkspace();

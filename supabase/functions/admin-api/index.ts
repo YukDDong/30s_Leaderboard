@@ -48,6 +48,8 @@ Deno.serve(async (request) => {
 
   try {
     switch (action) {
+      case "session_status":
+        return jsonResponse({ message: "관리자 세션이 유효합니다." });
       case "add_team":
         return await handleAddTeam(supabase, body);
       case "remove_team":

@@ -64,6 +64,7 @@ function renderPage() {
   renderSummary(elements.summaryCards, state.teams, state.matches);
   renderMatches(elements.matchesContainer, state.teams, state.matches, {
     editable: false,
+    pendingLabel: "-",
   });
   renderStandings(elements.standingsBody, state.teams, state.matches);
 }

@@ -93,8 +93,25 @@ a {
   min-width: 0;
 }
 
+.viewer-hero-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
+.viewer-hero-card .hero-copy {
+  grid-column: 1;
+  grid-row: 1;
+}
+
 .hero-copy {
   min-width: 0;
+}
+
+.viewer-hero-toolbar {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
 }
 
 .eyebrow,
@@ -1012,6 +1029,10 @@ input[type="password"]:focus {
     gap: 20px;
   }
 
+  .viewer-hero-toolbar {
+    justify-self: end;
+  }
+
   .hero-aside {
     padding: 18px;
   }
@@ -1119,6 +1140,10 @@ input[type="password"]:focus {
   .table-action-button,
   .button-link {
     width: 100%;
+  }
+
+  .viewer-hero-toolbar .button-link {
+    width: auto;
   }
 
   .modal-footer {
