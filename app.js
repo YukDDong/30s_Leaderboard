@@ -8,6 +8,9 @@ const STORAGE_KEYS = {
 const state = {
   teams: [],
   matches: [],
+  selectedMatchId: null,
+  isModalOpen: false,
+  lastFocusedElement: null,
 };
 
 // 자주 사용하는 화면 요소를 한 곳에서 관리합니다.
@@ -20,21 +23,35 @@ const elements = {
   generateMatchesButton: document.getElementById("generateMatchesButton"),
   matchGenerationMessage: document.getElementById("matchGenerationMessage"),
   matchesContainer: document.getElementById("matchesContainer"),
+  matchesMessage: document.getElementById("matchesMessage"),
   standingsBody: document.getElementById("standingsBody"),
   summaryCards: document.getElementById("summaryCards"),
   summaryCardTemplate: document.getElementById("summaryCardTemplate"),
   resetButton: document.getElementById("resetButton"),
   resetMessage: document.getElementById("resetMessage"),
+  matchModalOverlay: document.getElementById("matchModalOverlay"),
+  matchModal: document.getElementById("matchModal"),
+  closeMatchModalButton: document.getElementById("closeMatchModalButton"),
+  cancelMatchButton: document.getElementById("cancelMatchButton"),
+  matchModalForm: document.getElementById("matchModalForm"),
+  saveMatchButton: document.getElementById("saveMatchButton"),
+  clearMatchButton: document.getElementById("clearMatchButton"),
+  modalMatchNumber: document.getElementById("modalMatchNumber"),
+  modalMatchLabel: document.getElementById("modalMatchLabel"),
+  modalMatchStatus: document.getElementById("modalMatchStatus"),
+  modalTeamALabel: document.getElementById("modalTeamALabel"),
+  modalTeamBLabel: document.getElementById("modalTeamBLabel"),
+  modalScoreA: document.getElementById("modalScoreA"),
+  modalScoreB: document.getElementById("modalScoreB"),
+  modalErrorMessage: document.getElementById("modalErrorMessage"),
 };
 
-// 앱이 시작될 때 저장된 데이터를 읽고 화면을 그립니다.
 function initializeApp() {
   loadData();
   bindEvents();
   renderApp();
 }
 
-// localStorage에서 팀과 경기 데이터를 읽습니다.
 function loadData() {
   const savedTeams = localStorage.getItem(STORAGE_KEYS.teams);
   const savedMatches = localStorage.getItem(STORAGE_KEYS.matches);
@@ -43,13 +60,11 @@ function loadData() {
   state.matches = parseMatches(savedMatches);
 }
 
-// 현재 상태를 localStorage에 저장합니다.
 function saveData() {
   localStorage.setItem(STORAGE_KEYS.teams, JSON.stringify(state.teams));
   localStorage.setItem(STORAGE_KEYS.matches, JSON.stringify(state.matches));
 }
 
-// 팀 배열은 문자열 목록만 허용합니다.
 function parseTeams(rawValue) {
   if (!rawValue) {
     return [];
@@ -72,7 +87,6 @@ function parseTeams(rawValue) {
   }
 }
 
-// 경기 배열은 필요한 필드가 있는 객체만 복원합니다.
 function parseMatches(rawValue) {
   if (!rawValue) {
     return [];
@@ -99,7 +113,11 @@ function parseMatches(rawValue) {
       .map((match) => ({
         ...match,
         isPlayed:
-          match.isPlayed && Number.isInteger(match.scoreA) && match.scoreA >= 0 && Number.isInteger(match.scoreB) && match.scoreB >= 0,
+          match.isPlayed &&
+          Number.isInteger(match.scoreA) &&
+          match.scoreA >= 0 &&
+          Number.isInteger(match.scoreB) &&
+          match.scoreB >= 0,
       }));
   } catch (error) {
     console.error("경기 데이터 복원 중 오류가 발생했습니다.", error);
@@ -107,7 +125,6 @@ function parseMatches(rawValue) {
   }
 }
 
-// 폼과 버튼 이벤트를 연결합니다.
 function bindEvents() {
   elements.teamForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -132,36 +149,66 @@ function bindEvents() {
     removeTeam(button.dataset.team);
   });
 
-  elements.matchesContainer.addEventListener("submit", (event) => {
-    const form = event.target.closest("form[data-match-id]");
+  elements.matchesContainer.addEventListener("click", (event) => {
+    const row = event.target.closest("tr[data-match-id]");
+    const button = event.target.closest("button[data-open-match-id]");
 
-    if (!form) {
+    if (button) {
+      openMatchModal(button.dataset.openMatchId, button);
       return;
     }
 
-    event.preventDefault();
-
-    const matchId = form.dataset.matchId;
-    const formData = new FormData(form);
-
-    updateMatch(matchId, formData.get("scoreA"), formData.get("scoreB"));
+    if (row) {
+      openMatchModal(row.dataset.matchId, row);
+    }
   });
 
-  elements.matchesContainer.addEventListener("click", (event) => {
-    const clearButton = event.target.closest("button[data-clear-match-id]");
+  elements.matchesContainer.addEventListener("keydown", (event) => {
+    const row = event.target.closest("tr[data-match-id]");
 
-    if (!clearButton) {
+    if (!row) {
       return;
     }
 
-    clearMatchResult(clearButton.dataset.clearMatchId);
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      openMatchModal(row.dataset.matchId, row);
+    }
+  });
+
+  elements.matchModalForm.addEventListener("submit", (event) => {
+    handleMatchSave(event);
+  });
+
+  elements.clearMatchButton.addEventListener("click", () => {
+    handleMatchClear();
+  });
+
+  elements.closeMatchModalButton.addEventListener("click", () => {
+    closeMatchModal();
+  });
+
+  elements.cancelMatchButton.addEventListener("click", () => {
+    closeMatchModal();
+  });
+
+  elements.matchModalOverlay.addEventListener("click", (event) => {
+    if (event.target === elements.matchModalOverlay) {
+      closeMatchModal();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && state.isModalOpen) {
+      closeMatchModal();
+    }
   });
 }
 
-// 팀을 추가합니다.
 function addTeam(rawTeamName) {
   clearMessage(elements.resetMessage);
   clearMessage(elements.matchGenerationMessage);
+  clearMessage(elements.matchesMessage);
 
   const teamName = typeof rawTeamName === "string" ? rawTeamName.trim() : "";
 
@@ -186,7 +233,6 @@ function addTeam(rawTeamName) {
   setMessage(elements.teamMessage, `팀 \"${teamName}\"을(를) 추가했습니다.`, "success");
 }
 
-// 경기 일정이 없을 때만 팀을 삭제할 수 있습니다.
 function removeTeam(teamName) {
   if (state.matches.length > 0) {
     setMessage(
@@ -203,10 +249,10 @@ function removeTeam(teamName) {
   setMessage(elements.teamMessage, `팀 \"${teamName}\"을(를) 삭제했습니다.`, "success");
 }
 
-// 등록된 팀들로 단일 풀리그 경기 목록을 생성합니다.
 function generateMatches() {
   clearMessage(elements.teamMessage);
   clearMessage(elements.resetMessage);
+  clearMessage(elements.matchesMessage);
 
   if (state.teams.length < 2) {
     setMessage(elements.matchGenerationMessage, "경기를 생성하려면 팀이 2개 이상 필요합니다.", "danger");
@@ -242,25 +288,23 @@ function generateMatches() {
 
   setMessage(
     elements.matchGenerationMessage,
-    `총 ${createdMatches.length}경기의 단일 풀리그 일정이 생성되었습니다. 이제 점수를 입력해 주세요.`,
+    `총 ${createdMatches.length}경기의 단일 풀리그 일정이 생성되었습니다. 이제 경기 표에서 원하는 경기를 눌러 점수를 입력해 주세요.`,
     "success"
   );
 }
 
-// 특정 경기의 점수를 저장하고 결과를 반영합니다.
 function updateMatch(matchId, rawScoreA, rawScoreB) {
   const match = state.matches.find((item) => item.id === matchId);
 
   if (!match) {
-    return;
+    return { ok: false, message: "선택한 경기 정보를 찾을 수 없습니다.", tone: "danger" };
   }
 
   const scoreA = normalizeScore(rawScoreA);
   const scoreB = normalizeScore(rawScoreB);
 
   if (scoreA === null || scoreB === null) {
-    setMatchMessage(matchId, "점수는 0 이상의 정수만 저장할 수 있습니다.");
-    return;
+    return { ok: false, message: "점수는 0 이상의 정수만 저장할 수 있습니다.", tone: "danger" };
   }
 
   match.scoreA = scoreA;
@@ -269,15 +313,19 @@ function updateMatch(matchId, rawScoreA, rawScoreB) {
 
   saveData();
   renderApp();
-  setMatchMessage(matchId, "결과를 저장했습니다. 순위표가 즉시 갱신되었습니다.", "success");
+
+  return {
+    ok: true,
+    message: `${match.teamA} vs ${match.teamB} 경기 결과를 저장했습니다. 순위표가 즉시 갱신되었습니다.`,
+    tone: "success",
+  };
 }
 
-// 저장된 경기 결과를 비워서 미입력 상태로 되돌립니다.
 function clearMatchResult(matchId) {
   const match = state.matches.find((item) => item.id === matchId);
 
   if (!match) {
-    return;
+    return { ok: false, message: "선택한 경기 정보를 찾을 수 없습니다.", tone: "danger" };
   }
 
   match.scoreA = null;
@@ -286,10 +334,14 @@ function clearMatchResult(matchId) {
 
   saveData();
   renderApp();
-  setMatchMessage(matchId, "경기 결과를 초기화했습니다. 순위표를 다시 계산했습니다.", "success");
+
+  return {
+    ok: true,
+    message: `${match.teamA} vs ${match.teamB} 경기 결과를 초기화했습니다. 순위표를 다시 계산했습니다.`,
+    tone: "success",
+  };
 }
 
-// 입력 완료된 경기만 집계해서 순위표용 데이터를 만듭니다.
 function calculateStandings() {
   const standingsMap = new Map();
 
@@ -362,7 +414,6 @@ function calculateStandings() {
   });
 }
 
-// 상단 요약 카드를 그립니다.
 function renderSummary() {
   const playedMatches = state.matches.filter((match) => match.isPlayed).length;
   const totalMatches = state.matches.length;
@@ -404,7 +455,6 @@ function renderSummary() {
   });
 }
 
-// 팀 목록을 화면에 표시합니다.
 function renderTeams() {
   const matchesExist = state.matches.length > 0;
 
@@ -460,7 +510,6 @@ function renderTeams() {
   });
 }
 
-// 경기 목록과 입력 폼을 그립니다.
 function renderMatches() {
   elements.matchesContainer.innerHTML = "";
 
@@ -474,46 +523,57 @@ function renderMatches() {
     return;
   }
 
+  const tableWrap = document.createElement("div");
+  tableWrap.className = "table-wrap";
+
+  const table = document.createElement("table");
+  table.className = "matches-table";
+  table.innerHTML = `
+    <caption class="sr-only">경기 목록 표. 각 행을 클릭하면 점수 입력 또는 수정 모달이 열립니다.</caption>
+    <thead>
+      <tr>
+        <th>번호</th>
+        <th>팀 A</th>
+        <th>팀 B</th>
+        <th>현재 스코어</th>
+        <th>상태</th>
+        <th>입력</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+
+  const tbody = table.querySelector("tbody");
+
   state.matches.forEach((match, index) => {
-    const matchCard = document.createElement("article");
-    matchCard.className = `match-card ${match.isPlayed ? "played" : "pending"}`;
-    matchCard.dataset.matchCardId = match.id;
+    const row = document.createElement("tr");
+    row.className = `clickable-row ${match.isPlayed ? "match-row-played" : "match-row-pending"}`;
+    row.dataset.matchId = match.id;
+    row.tabIndex = 0;
+    row.setAttribute("role", "button");
+    row.setAttribute("aria-label", `${index + 1}경기 ${match.teamA} 대 ${match.teamB} 점수 ${formatMatchScore(match)} 편집 열기`);
 
-    const statusLabel = match.isPlayed ? "입력 완료" : "미입력";
     const statusClass = match.isPlayed ? "played" : "pending";
+    const actionLabel = match.isPlayed ? "수정" : "입력";
 
-    matchCard.innerHTML = `
-      <div class="match-top">
-        <div>
-          <p class="match-title">${index + 1}경기 · ${escapeHtml(match.teamA)} vs ${escapeHtml(match.teamB)}</p>
-        </div>
-        <span class="match-status ${statusClass}">${statusLabel}</span>
-      </div>
-      <form class="match-form" data-match-id="${match.id}" novalidate>
-        <div class="score-inputs">
-          <label>
-            <span class="team-label">${escapeHtml(match.teamA)}</span>
-            <input type="number" name="scoreA" min="0" step="1" inputmode="numeric" value="${formatScoreValue(match.scoreA)}" placeholder="0" />
-          </label>
-          <div class="score-divider">:</div>
-          <label>
-            <span class="team-label">${escapeHtml(match.teamB)}</span>
-            <input type="number" name="scoreB" min="0" step="1" inputmode="numeric" value="${formatScoreValue(match.scoreB)}" placeholder="0" />
-          </label>
-        </div>
-        <div class="match-actions">
-          <button class="primary-button" type="submit">결과 저장</button>
-          <button class="secondary-button" type="button" data-clear-match-id="${match.id}" ${match.isPlayed ? "" : "disabled"}>결과 초기화</button>
-        </div>
-      </form>
-      <p class="match-detail" data-match-message-id="${match.id}">${escapeHtml(buildMatchDescription(match))}</p>
+    row.innerHTML = `
+      <td>${index + 1}</td>
+      <td>${escapeHtml(match.teamA)}</td>
+      <td>${escapeHtml(match.teamB)}</td>
+      <td class="match-score-cell">${escapeHtml(formatMatchScore(match))}</td>
+      <td><span class="match-badge ${statusClass}">${match.isPlayed ? "입력 완료" : "미입력"}</span></td>
+      <td>
+        <button class="table-action-button" type="button" data-open-match-id="${match.id}">${actionLabel}</button>
+      </td>
     `;
 
-    elements.matchesContainer.appendChild(matchCard);
+    tbody.appendChild(row);
   });
+
+  tableWrap.appendChild(table);
+  elements.matchesContainer.appendChild(tableWrap);
 }
 
-// 계산된 순위표를 테이블에 표시합니다.
 function renderStandings() {
   elements.standingsBody.innerHTML = "";
 
@@ -546,21 +606,120 @@ function renderStandings() {
   });
 }
 
-// 앱 전체 화면을 다시 그립니다.
 function renderApp() {
   renderSummary();
   renderTeams();
   renderMatches();
   renderStandings();
   updateButtonStates();
+
+  if (state.isModalOpen && state.selectedMatchId) {
+    const selectedMatch = findMatchById(state.selectedMatchId);
+
+    if (selectedMatch) {
+      populateMatchModal(selectedMatch);
+    } else {
+      closeMatchModal({ restoreFocus: false });
+    }
+  }
 }
 
-// 버튼 상태를 현재 데이터 흐름에 맞게 맞춥니다.
 function updateButtonStates() {
   elements.generateMatchesButton.disabled = state.teams.length < 2 || state.matches.length > 0;
 }
 
-// 전체 데이터를 지우고 빈 상태로 되돌립니다.
+function openMatchModal(matchId, triggerElement = null) {
+  const match = findMatchById(matchId);
+
+  if (!match) {
+    setMessage(elements.matchesMessage, "선택한 경기 정보를 찾을 수 없습니다.", "danger");
+    return;
+  }
+
+  state.selectedMatchId = matchId;
+  state.isModalOpen = true;
+  state.lastFocusedElement = triggerElement || document.activeElement;
+
+  populateMatchModal(match);
+  clearMessage(elements.modalErrorMessage);
+
+  elements.matchModalOverlay.hidden = false;
+  elements.matchModalOverlay.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+
+  window.requestAnimationFrame(() => {
+    elements.modalScoreA.focus();
+  });
+}
+
+function closeMatchModal(options = {}) {
+  const { restoreFocus = true } = options;
+
+  state.selectedMatchId = null;
+  state.isModalOpen = false;
+
+  elements.matchModalForm.reset();
+  clearMessage(elements.modalErrorMessage);
+  elements.matchModalOverlay.hidden = true;
+  elements.matchModalOverlay.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+
+  if (restoreFocus && state.lastFocusedElement && typeof state.lastFocusedElement.focus === "function") {
+    state.lastFocusedElement.focus();
+  }
+
+  state.lastFocusedElement = null;
+}
+
+function populateMatchModal(match) {
+  const matchIndex = state.matches.findIndex((item) => item.id === match.id);
+  const statusClass = match.isPlayed ? "played" : "pending";
+
+  elements.modalMatchNumber.textContent = `${matchIndex + 1}경기`;
+  elements.modalMatchLabel.textContent = `${match.teamA} vs ${match.teamB}`;
+  elements.modalTeamALabel.textContent = match.teamA;
+  elements.modalTeamBLabel.textContent = match.teamB;
+  elements.modalScoreA.value = formatScoreValue(match.scoreA);
+  elements.modalScoreB.value = formatScoreValue(match.scoreB);
+  elements.modalMatchStatus.textContent = match.isPlayed ? "입력 완료" : "미입력";
+  elements.modalMatchStatus.className = `match-badge ${statusClass}`;
+  elements.clearMatchButton.disabled = !match.isPlayed;
+}
+
+function handleMatchSave(event) {
+  event.preventDefault();
+
+  if (!state.selectedMatchId) {
+    return;
+  }
+
+  const result = updateMatch(state.selectedMatchId, elements.modalScoreA.value, elements.modalScoreB.value);
+
+  if (!result.ok) {
+    setMessage(elements.modalErrorMessage, result.message, result.tone);
+    return;
+  }
+
+  setMessage(elements.matchesMessage, result.message, result.tone);
+  closeMatchModal();
+}
+
+function handleMatchClear() {
+  if (!state.selectedMatchId) {
+    return;
+  }
+
+  const result = clearMatchResult(state.selectedMatchId);
+
+  if (!result.ok) {
+    setMessage(elements.modalErrorMessage, result.message, result.tone);
+    return;
+  }
+
+  setMessage(elements.matchesMessage, result.message, result.tone);
+  closeMatchModal();
+}
+
 function resetAllData() {
   const shouldReset = window.confirm(
     "팀 목록과 경기 기록을 모두 삭제하고 처음 상태로 되돌릴까요? 이 작업은 되돌릴 수 없습니다."
@@ -574,17 +733,25 @@ function resetAllData() {
   state.teams = [];
   state.matches = [];
 
+  if (state.isModalOpen) {
+    closeMatchModal({ restoreFocus: false });
+  }
+
   localStorage.removeItem(STORAGE_KEYS.teams);
   localStorage.removeItem(STORAGE_KEYS.matches);
 
   clearMessage(elements.teamMessage);
   clearMessage(elements.matchGenerationMessage);
+  clearMessage(elements.matchesMessage);
   renderApp();
 
   setMessage(elements.resetMessage, "모든 데이터를 초기화했습니다. 빈 상태에서 다시 시작할 수 있습니다.", "success");
 }
 
-// 경기 고유 아이디를 만들 때 사용하는 유틸 함수입니다.
+function findMatchById(matchId) {
+  return state.matches.find((item) => item.id === matchId) || null;
+}
+
 function createMatchId(teamA, teamB, index) {
   const safeTeamA = sanitizeForId(teamA);
   const safeTeamB = sanitizeForId(teamB);
@@ -601,7 +768,6 @@ function sanitizeForId(value) {
   return sanitized || "team";
 }
 
-// 숫자 입력을 0 이상의 정수인지 검사한 뒤 숫자로 바꿉니다.
 function normalizeScore(value) {
   if (value === null || value === undefined) {
     return null;
@@ -621,29 +787,14 @@ function normalizeScore(value) {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
-// 경기 카드 하단에 현재 결과 상태를 설명해 줍니다.
-function buildMatchDescription(match) {
-  if (!match.isPlayed) {
-    return "점수를 입력하고 결과 저장 버튼을 누르면 순위표가 자동으로 반영됩니다.";
-  }
-
-  if (match.scoreA > match.scoreB) {
-    return `${match.teamA} 승리 · ${match.scoreA}득점 ${match.scoreB}실점 / ${match.teamB} 패배`;
-  }
-
-  if (match.scoreA < match.scoreB) {
-    return `${match.teamB} 승리 · ${match.scoreB}득점 ${match.scoreA}실점 / ${match.teamA} 패배`;
-  }
-
-  return `무승부 · ${match.teamA} ${match.scoreA} : ${match.scoreB} ${match.teamB}`;
+function formatMatchScore(match) {
+  return match.isPlayed ? `${match.scoreA} : ${match.scoreB}` : "-";
 }
 
-// 점수가 없으면 빈칸으로 표시합니다.
 function formatScoreValue(score) {
   return Number.isInteger(score) ? String(score) : "";
 }
 
-// 섹션별 안내 메시지를 표시합니다.
 function setMessage(element, message, tone = "warning") {
   element.textContent = message;
   element.dataset.tone = tone;
@@ -654,19 +805,6 @@ function clearMessage(element) {
   delete element.dataset.tone;
 }
 
-// 경기 카드 내부 메시지를 바꿉니다.
-function setMatchMessage(matchId, message, tone = "warning") {
-  const messageElement = document.querySelector(`[data-match-message-id="${matchId}"]`);
-
-  if (!messageElement) {
-    return;
-  }
-
-  messageElement.textContent = message;
-  messageElement.style.color = tone === "success" ? "var(--success)" : tone === "danger" ? "var(--danger)" : "var(--warning)";
-}
-
-// 빈 상태 UI를 공통으로 만들기 위한 함수입니다.
 function createEmptyState(title, description) {
   const emptyState = document.createElement("article");
   emptyState.className = "empty-state";
@@ -677,7 +815,6 @@ function createEmptyState(title, description) {
   return emptyState;
 }
 
-// innerHTML에 텍스트를 넣기 전 간단히 이스케이프합니다.
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")

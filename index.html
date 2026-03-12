@@ -104,11 +104,15 @@
               <h2 id="matches-heading">경기 목록 및 점수 입력</h2>
             </div>
             <p class="section-description">
-              각 경기의 점수를 입력해 저장하면 순위표가 즉시 다시 계산됩니다.
+              표에서 경기를 빠르게 훑고, 원하는 행을 눌러 모달에서 점수를 입력하거나 수정하세요.
             </p>
           </div>
-          <p class="helper-text">입력 완료 경기는 강조 표시되며, 언제든 수정하거나 초기화할 수 있습니다.</p>
-          <div id="matchesContainer" class="matches-list"></div>
+          <p class="helper-text">
+            경기 행을 클릭하거나 입력 버튼을 누르면 모달이 열립니다. 저장 또는 초기화 후 순위표와
+            진행 현황이 즉시 갱신됩니다.
+          </p>
+          <div id="matchesContainer" class="matches-table-shell"></div>
+          <p id="matchesMessage" class="inline-message" aria-live="polite"></p>
         </section>
 
         <section class="panel wide-panel" aria-labelledby="standings-heading">
@@ -163,6 +167,71 @@
         </section>
       </main>
     </div>
+
+    <section
+      id="matchModalOverlay"
+      class="modal-overlay"
+      hidden
+      aria-hidden="true"
+    >
+      <div
+        id="matchModal"
+        class="modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="matchModalTitle"
+        aria-describedby="matchModalDescription"
+      >
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker modal-kicker">Match Editor</p>
+            <h2 id="matchModalTitle">경기 점수 입력</h2>
+            <p id="matchModalDescription" class="modal-description">
+              점수 저장 시 승/무/패와 순위표가 자동으로 갱신됩니다.
+            </p>
+          </div>
+          <button
+            id="closeMatchModalButton"
+            class="icon-button"
+            type="button"
+            aria-label="경기 입력 모달 닫기"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="modal-body">
+          <div class="modal-match-card">
+            <span class="modal-match-number" id="modalMatchNumber"></span>
+            <strong id="modalMatchLabel" class="modal-match-label"></strong>
+            <span id="modalMatchStatus" class="match-badge pending">미입력</span>
+          </div>
+
+          <form id="matchModalForm" class="modal-form" novalidate>
+            <div class="modal-score-grid">
+              <label class="input-group modal-input-group">
+                <span id="modalTeamALabel">팀 A</span>
+                <input id="modalScoreA" name="scoreA" type="number" min="0" step="1" inputmode="numeric" placeholder="0" />
+              </label>
+              <div class="modal-score-divider">:</div>
+              <label class="input-group modal-input-group">
+                <span id="modalTeamBLabel">팀 B</span>
+                <input id="modalScoreB" name="scoreB" type="number" min="0" step="1" inputmode="numeric" placeholder="0" />
+              </label>
+            </div>
+
+            <p class="modal-note">점수는 0 이상의 정수만 입력할 수 있습니다.</p>
+            <p id="modalErrorMessage" class="inline-message modal-message" aria-live="polite"></p>
+
+            <div class="modal-footer">
+              <button id="saveMatchButton" class="primary-button" type="submit">저장</button>
+              <button id="clearMatchButton" class="secondary-button" type="button">결과 초기화</button>
+              <button id="cancelMatchButton" class="ghost-danger-button" type="button">닫기</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
 
     <template id="summaryCardTemplate">
       <article class="summary-card">
