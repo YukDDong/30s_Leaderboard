@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tennis League Board</title>
+    <meta
+      name="description"
+      content="팀 등록, 경기 생성, 점수 입력, 순위표 계산을 한 번에 관리하는 정적 테니스 리그 대시보드"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero-card">
+        <div class="hero-copy">
+          <p class="eyebrow">Tennis League Dashboard</p>
+          <h1>테니스 리그 결과 입력 및 순위표 관리</h1>
+          <p class="hero-description">
+            팀을 등록하고, 경기 일정을 생성한 뒤, 각 경기 점수만 입력하면 순위표가 자동으로
+            갱신됩니다. 서버 없이 브라우저와 localStorage만으로 동작합니다.
+          </p>
+        </div>
+        <div class="hero-aside">
+          <div class="hero-badge">정적 웹 / GitHub Pages</div>
+          <p>초보자도 바로 실행하고 배포할 수 있도록 단순한 구조로 만들었습니다.</p>
+        </div>
+      </header>
+
+      <main class="main-grid">
+        <section class="panel summary-panel" aria-labelledby="summary-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Overview</p>
+              <h2 id="summary-heading">진행 현황</h2>
+            </div>
+          </div>
+          <div id="summaryCards" class="summary-grid"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="team-form-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Step 1</p>
+              <h2 id="team-form-heading">팀 등록</h2>
+            </div>
+            <p class="section-description">팀명을 직접 입력해 리그 참가 팀을 추가하세요.</p>
+          </div>
+
+          <form id="teamForm" class="team-form" novalidate>
+            <label class="input-group">
+              <span>팀명</span>
+              <input id="teamNameInput" type="text" maxlength="30" placeholder="예: 강동 에이스" />
+            </label>
+            <button id="addTeamButton" class="primary-button" type="submit">팀 추가</button>
+          </form>
+          <p id="teamMessage" class="inline-message" aria-live="polite"></p>
+        </section>
+
+        <section class="panel" aria-labelledby="team-list-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Step 2</p>
+              <h2 id="team-list-heading">등록된 팀 목록</h2>
+            </div>
+            <p class="section-description">
+              경기 생성 전까지만 팀 삭제가 가능합니다. 경기 생성 후에는 데이터 정합성을 위해 팀
+              편집이 잠깁니다.
+            </p>
+          </div>
+          <div id="teamsContainer" class="stack-list"></div>
+        </section>
+
+        <section class="panel" aria-labelledby="match-generate-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Step 3</p>
+              <h2 id="match-generate-heading">경기 생성</h2>
+            </div>
+            <p class="section-description">
+              팀이 2개 이상일 때 단일 풀리그 경기 목록을 생성할 수 있습니다.
+            </p>
+          </div>
+          <div class="action-card">
+            <div>
+              <strong>단일 라운드 로빈</strong>
+              <p>각 팀은 다른 모든 팀과 1번씩 경기합니다.</p>
+            </div>
+            <button id="generateMatchesButton" class="primary-button" type="button">경기 생성</button>
+          </div>
+          <p id="matchGenerationMessage" class="inline-message" aria-live="polite"></p>
+        </section>
+
+        <section class="panel wide-panel" aria-labelledby="matches-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Step 4</p>
+              <h2 id="matches-heading">경기 목록 및 점수 입력</h2>
+            </div>
+            <p class="section-description">
+              각 경기의 점수를 입력해 저장하면 순위표가 즉시 다시 계산됩니다.
+            </p>
+          </div>
+          <p class="helper-text">입력 완료 경기는 강조 표시되며, 언제든 수정하거나 초기화할 수 있습니다.</p>
+          <div id="matchesContainer" class="matches-list"></div>
+        </section>
+
+        <section class="panel wide-panel" aria-labelledby="standings-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Step 5</p>
+              <h2 id="standings-heading">순위표</h2>
+            </div>
+            <p class="section-description">
+              승점 내림차순, 이후 득실차 내림차순으로 자동 정렬됩니다.
+            </p>
+          </div>
+          <div class="table-wrap">
+            <table class="standings-table">
+              <thead>
+                <tr>
+                  <th>순위</th>
+                  <th>팀명</th>
+                  <th>경기수</th>
+                  <th>승</th>
+                  <th>무</th>
+                  <th>패</th>
+                  <th>득점</th>
+                  <th>실점</th>
+                  <th>득실차</th>
+                  <th>승점</th>
+                </tr>
+              </thead>
+              <tbody id="standingsBody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel danger-panel" aria-labelledby="reset-heading">
+          <div class="section-header">
+            <div>
+              <p class="section-kicker">Maintenance</p>
+              <h2 id="reset-heading">데이터 초기화</h2>
+            </div>
+            <p class="section-description">
+              팀 목록과 경기 기록을 모두 삭제하고 처음 상태로 되돌립니다.
+            </p>
+          </div>
+          <div class="action-card reset-card">
+            <div>
+              <strong>주의</strong>
+              <p>초기화 후에는 현재 브라우저에 저장된 리그 데이터가 모두 사라집니다.</p>
+            </div>
+            <button id="resetButton" class="ghost-danger-button" type="button">전체 초기화</button>
+          </div>
+          <p id="resetMessage" class="inline-message" aria-live="polite"></p>
+        </section>
+      </main>
+    </div>
+
+    <template id="summaryCardTemplate">
+      <article class="summary-card">
+        <p class="summary-label"></p>
+        <strong class="summary-value"></strong>
+        <span class="summary-note"></span>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
