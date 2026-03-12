@@ -6,7 +6,7 @@
     <title>Tennis League Board</title>
     <meta
       name="description"
-      content="팀 등록, 경기 생성, 점수 입력, 순위표 계산을 한 번에 관리하는 정적 테니스 리그 대시보드"
+      content="Supabase 기반 보기 전용 테니스 리그 대시보드에서 경기 현황과 순위표를 확인할 수 있습니다."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -22,8 +22,36 @@
         <div class="hero-copy">
           <p class="eyebrow">Tennis League Dashboard</p>
           <h1>써티즈 리그 순위표</h1>
+          <p class="hero-description">
+            보기 전용 페이지입니다. Supabase에 저장된 팀, 경기 진행 현황,
+            순위표를 한 화면에서 확인할 수 있습니다.
+          </p>
         </div>
+
+        <aside class="hero-aside">
+          <div>
+            <span class="hero-badge">Viewer Mode</span>
+            <p>
+              경기 결과 수정, 팀 등록, 데이터 초기화는 관리자 페이지에서만
+              가능합니다.
+            </p>
+          </div>
+          <div class="hero-actions">
+            <a class="secondary-button button-link" href="./admin.html"
+              >관리자 페이지</a
+            >
+          </div>
+        </aside>
       </header>
+
+      <section
+        id="configNotice"
+        class="panel status-panel"
+        aria-live="polite"
+        hidden
+      >
+        <p id="configNoticeMessage" class="status-banner"></p>
+      </section>
 
       <main class="main-grid">
         <section class="panel summary-panel" aria-labelledby="summary-heading">
@@ -35,75 +63,18 @@
           <div id="summaryCards" class="summary-grid"></div>
         </section>
 
-        <section class="panel wide-panel" aria-labelledby="team-setup-heading">
-          <div class="section-header">
-            <div>
-              <p class="section-kicker">Step 1</p>
-              <h2 id="team-setup-heading">팀 등록 및 경기 생성</h2>
-            </div>
-          </div>
-
-          <div class="setup-grid">
-            <div class="setup-block">
-              <form id="teamForm" class="team-form" novalidate>
-                <label class="input-group">
-                  <span>팀명</span>
-                  <input
-                    id="teamNameInput"
-                    type="text"
-                    maxlength="30"
-                    placeholder="예: 강동 에이스"
-                  />
-                </label>
-                <button id="addTeamButton" class="primary-button" type="submit">
-                  팀 추가
-                </button>
-              </form>
-              <p id="teamMessage" class="inline-message" aria-live="polite"></p>
-            </div>
-
-            <div class="setup-block">
-              <div class="action-card compact-action-card">
-                <div>
-                  <strong>경기 생성</strong>
-                  <p>2팀 이상부터 생성 가능</p>
-                </div>
-                <button
-                  id="generateMatchesButton"
-                  class="primary-button"
-                  type="button"
-                >
-                  경기 생성
-                </button>
-              </div>
-              <p
-                id="matchGenerationMessage"
-                class="inline-message"
-                aria-live="polite"
-              ></p>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel wide-panel" aria-labelledby="team-list-heading">
-          <div class="section-header">
-            <div>
-              <p class="section-kicker">Step 2</p>
-              <h2 id="team-list-heading">등록된 팀 목록</h2>
-            </div>
-            <p class="section-description">경기 생성 후 팀 수정 잠금</p>
-          </div>
-          <div id="teamsContainer" class="stack-list"></div>
-        </section>
-
         <section class="panel wide-panel" aria-labelledby="matches-heading">
           <div class="section-header">
             <div>
-              <p class="section-kicker">Step 3</p>
-              <h2 id="matches-heading">경기 목록 및 점수 입력</h2>
+              <p class="section-kicker">Matches</p>
+              <h2 id="matches-heading">경기 목록</h2>
             </div>
+            <p class="section-description">
+              보기 전용 교차표입니다. 관리자만 별도 페이지에서 경기 결과를
+              수정할 수 있습니다.
+            </p>
           </div>
-          <p class="helper-text">셀 클릭으로 입력 또는 수정</p>
+          <p class="helper-text">읽기 전용으로 최신 경기 결과만 표시합니다.</p>
           <div id="matchesContainer" class="matches-table-shell"></div>
           <p id="matchesMessage" class="inline-message" aria-live="polite"></p>
         </section>
@@ -111,7 +82,7 @@
         <section class="panel wide-panel" aria-labelledby="standings-heading">
           <div class="section-header">
             <div>
-              <p class="section-kicker">Step 4</p>
+              <p class="section-kicker">Standings</p>
               <h2 id="standings-heading">순위표</h2>
             </div>
           </div>
@@ -135,140 +106,10 @@
             </table>
           </div>
         </section>
-
-        <section class="panel danger-panel" aria-labelledby="reset-heading">
-          <div class="section-header">
-            <div>
-              <p class="section-kicker">Maintenance</p>
-              <h2 id="reset-heading">데이터 초기화</h2>
-            </div>
-          </div>
-          <div class="action-card reset-card">
-            <div>
-              <strong>주의</strong>
-              <p>
-                초기화 후에는 현재 브라우저에 저장된 리그 데이터가 모두
-                사라집니다.
-              </p>
-            </div>
-            <button id="resetButton" class="ghost-danger-button" type="button">
-              전체 초기화
-            </button>
-          </div>
-          <p id="resetMessage" class="inline-message" aria-live="polite"></p>
-        </section>
       </main>
     </div>
 
-    <section
-      id="matchModalOverlay"
-      class="modal-overlay"
-      hidden
-      aria-hidden="true"
-    >
-      <div
-        id="matchModal"
-        class="modal-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="matchModalTitle"
-        aria-describedby="matchModalDescription"
-      >
-        <div class="modal-header">
-          <div>
-            <p class="section-kicker modal-kicker">Match Editor</p>
-            <h2 id="matchModalTitle">경기 점수 입력</h2>
-            <p id="matchModalDescription" class="modal-description">
-              점수 저장 시 승/무/패와 순위표가 자동으로 갱신됩니다.
-            </p>
-          </div>
-          <button
-            id="closeMatchModalButton"
-            class="icon-button"
-            type="button"
-            aria-label="경기 입력 모달 닫기"
-          >
-            ×
-          </button>
-        </div>
-
-        <div class="modal-body">
-          <div class="modal-match-card">
-            <span class="modal-match-number" id="modalMatchNumber"></span>
-            <strong id="modalMatchLabel" class="modal-match-label"></strong>
-            <span id="modalMatchStatus" class="match-badge pending"
-              >미입력</span
-            >
-          </div>
-
-          <form id="matchModalForm" class="modal-form" novalidate>
-            <div class="modal-score-grid">
-              <label class="input-group modal-input-group">
-                <span id="modalTeamALabel">팀 A</span>
-                <input
-                  id="modalScoreA"
-                  name="scoreA"
-                  type="number"
-                  min="0"
-                  step="1"
-                  inputmode="numeric"
-                  placeholder="0"
-                />
-              </label>
-              <div class="modal-score-divider">:</div>
-              <label class="input-group modal-input-group">
-                <span id="modalTeamBLabel">팀 B</span>
-                <input
-                  id="modalScoreB"
-                  name="scoreB"
-                  type="number"
-                  min="0"
-                  step="1"
-                  inputmode="numeric"
-                  placeholder="0"
-                />
-              </label>
-            </div>
-
-            <p class="modal-note">점수는 0 이상의 정수만 입력할 수 있습니다.</p>
-            <p
-              id="modalErrorMessage"
-              class="inline-message modal-message"
-              aria-live="polite"
-            ></p>
-
-            <div class="modal-footer">
-              <button id="saveMatchButton" class="primary-button" type="submit">
-                저장
-              </button>
-              <button
-                id="clearMatchButton"
-                class="secondary-button"
-                type="button"
-              >
-                결과 초기화
-              </button>
-              <button
-                id="cancelMatchButton"
-                class="ghost-danger-button"
-                type="button"
-              >
-                닫기
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </section>
-
-    <template id="summaryCardTemplate">
-      <article class="summary-card">
-        <p class="summary-label"></p>
-        <strong class="summary-value"></strong>
-        <span class="summary-note"></span>
-      </article>
-    </template>
-
-    <script src="app.js"></script>
+    <script src="config.js"></script>
+    <script type="module" src="viewer.js"></script>
   </body>
 </html>
