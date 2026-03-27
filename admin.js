@@ -16,6 +16,7 @@ import {
   fetchLeagueData,
   getMissingConfigKeys,
   isSupabaseConfigured,
+  subscribeToLeagueRealtime,
   uploadLeagueAssetImage,
   validateLeagueImageFile,
   verifyAdminPassword,
@@ -35,7 +36,13 @@ const state = {
   lastFocusedElement: null,
   loading: false,
   pendingLeagueImagePreviewUrl: "",
+  isHydrating: false,
+  pendingRealtimeRefresh: false,
+  refreshDebounceId: null,
+  realtimeCleanup: null,
 };
+
+const REALTIME_REFRESH_DEBOUNCE_MS = 500;
 
 const elements = {
   adminHeader: document.getElementById("adminHeader"),
@@ -175,8 +182,17 @@ async function handlePasswordSubmit(event) {
   }
 }
 
-async function hydrateAdminPage(statusMessage = "") {
-  setBusy(true, "Supabase에서 최신 리그 데이터를 불러오는 중입니다.");
+async function hydrateAdminPage(statusMessage = "", { showBusy = true } = {}) {
+  if (state.isHydrating) {
+    state.pendingRealtimeRefresh = true;
+    return;
+  }
+
+  state.isHydrating = true;
+
+  if (showBusy) {
+    setBusy(true, "Supabase에서 최신 리그 데이터를 불러오는 중입니다.");
+  }
 
   try {
     const { teams, matches, leagueAsset } = await fetchLeagueData();
@@ -184,11 +200,17 @@ async function hydrateAdminPage(statusMessage = "") {
     state.teams = normalized.teams;
     state.matches = normalized.matches;
     state.leagueAsset = leagueAsset;
+
+    if (state.selectedMatchId && !findMatchById(state.matches, state.selectedMatchId)) {
+      closeMatchModal({ restoreFocus: false });
+    }
+
     renderAdminWorkspace();
+    state.pendingRealtimeRefresh = false;
 
     if (statusMessage) {
       setMessage(elements.adminStatusMessage, statusMessage, "success");
-    } else {
+    } else if (showBusy) {
       clearMessage(elements.adminStatusMessage);
     }
   } catch (error) {
@@ -199,7 +221,16 @@ async function hydrateAdminPage(statusMessage = "") {
       "danger"
     );
   } finally {
-    setBusy(false);
+    if (showBusy) {
+      setBusy(false);
+    }
+
+    state.isHydrating = false;
+
+    if (state.pendingRealtimeRefresh && !state.loading && !state.isModalOpen) {
+      state.pendingRealtimeRefresh = false;
+      void hydrateAdminPage("", { showBusy: false });
+    }
   }
 }
 
@@ -548,6 +579,11 @@ function closeMatchModal({ restoreFocus = true } = {}) {
   }
 
   state.lastFocusedElement = null;
+
+  if (state.pendingRealtimeRefresh && !state.loading) {
+    state.pendingRealtimeRefresh = false;
+    void hydrateAdminPage("", { showBusy: false });
+  }
 }
 
 function populateMatchModal(match) {
@@ -709,6 +745,7 @@ function handleLogout() {
 }
 
 function lockAdmin() {
+  stopRealtimeSync();
   elements.adminHeader.hidden = true;
   elements.authPanel.hidden = false;
   elements.adminWorkspace.hidden = true;
@@ -720,7 +757,52 @@ function unlockAdmin() {
   elements.authPanel.hidden = true;
   elements.adminWorkspace.hidden = false;
   renderAdminWorkspace();
+  startRealtimeSync();
   updateButtonStates();
+}
+
+function startRealtimeSync() {
+  if (state.realtimeCleanup) {
+    return;
+  }
+
+  state.realtimeCleanup = subscribeToLeagueRealtime(() => {
+    scheduleRealtimeRefresh();
+  });
+}
+
+function stopRealtimeSync() {
+  if (state.refreshDebounceId) {
+    window.clearTimeout(state.refreshDebounceId);
+    state.refreshDebounceId = null;
+  }
+
+  if (!state.realtimeCleanup) {
+    return;
+  }
+
+  state.realtimeCleanup();
+  state.realtimeCleanup = null;
+}
+
+function scheduleRealtimeRefresh() {
+  if (elements.adminWorkspace.hidden || !isAdminSessionValid()) {
+    return;
+  }
+
+  if (state.loading || state.isModalOpen) {
+    state.pendingRealtimeRefresh = true;
+    return;
+  }
+
+  if (state.refreshDebounceId) {
+    window.clearTimeout(state.refreshDebounceId);
+  }
+
+  state.refreshDebounceId = window.setTimeout(() => {
+    state.refreshDebounceId = null;
+    void hydrateAdminPage("", { showBusy: false });
+  }, REALTIME_REFRESH_DEBOUNCE_MS);
 }
 
 function setBusy(isBusy, statusMessage = "") {

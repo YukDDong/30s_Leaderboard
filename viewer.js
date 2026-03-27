@@ -10,13 +10,20 @@ import {
   fetchLeagueData,
   getMissingConfigKeys,
   isSupabaseConfigured,
+  subscribeToLeagueRealtime,
 } from "./supabase-client.js";
 
 const state = {
   teams: [],
   matches: [],
   leagueAsset: null,
+  isHydrating: false,
+  hasPendingRefresh: false,
+  refreshDebounceId: null,
+  realtimeCleanup: null,
 };
+
+const REALTIME_REFRESH_DEBOUNCE_MS = 500;
 
 const elements = {
   configNotice: document.getElementById("configNotice"),
@@ -44,7 +51,21 @@ async function initializeViewerPage() {
     return;
   }
 
-  setMessage(elements.matchesMessage, "Supabase에서 최신 리그 데이터를 불러오는 중입니다.", "warning");
+  startRealtimeSync();
+  await hydrateViewerPage({ showLoadingMessage: true });
+}
+
+async function hydrateViewerPage({ showLoadingMessage = false } = {}) {
+  if (state.isHydrating) {
+    state.hasPendingRefresh = true;
+    return;
+  }
+
+  state.isHydrating = true;
+
+  if (showLoadingMessage) {
+    setMessage(elements.matchesMessage, "Supabase에서 최신 리그 데이터를 불러오는 중입니다.", "warning");
+  }
 
   try {
     const { teams, matches, leagueAsset } = await fetchLeagueData();
@@ -61,7 +82,35 @@ async function initializeViewerPage() {
       error.message || "리그 데이터를 불러오지 못했습니다. Supabase 설정과 네트워크 상태를 확인해 주세요.",
       "danger"
     );
+  } finally {
+    state.isHydrating = false;
+
+    if (state.hasPendingRefresh) {
+      state.hasPendingRefresh = false;
+      void hydrateViewerPage();
+    }
   }
+}
+
+function startRealtimeSync() {
+  if (state.realtimeCleanup) {
+    return;
+  }
+
+  state.realtimeCleanup = subscribeToLeagueRealtime(() => {
+    scheduleRealtimeRefresh();
+  });
+}
+
+function scheduleRealtimeRefresh() {
+  if (state.refreshDebounceId) {
+    window.clearTimeout(state.refreshDebounceId);
+  }
+
+  state.refreshDebounceId = window.setTimeout(() => {
+    state.refreshDebounceId = null;
+    void hydrateViewerPage();
+  }, REALTIME_REFRESH_DEBOUNCE_MS);
 }
 
 function renderPage() {

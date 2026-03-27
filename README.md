@@ -19,6 +19,7 @@ GitHub Pages에 그대로 배포할 수 있는 정적 프론트와 Supabase DB +
 
 - 프론트 배포: GitHub Pages
 - 읽기 저장소: Supabase Database + Supabase Storage(public bucket)
+- 실시간 갱신: Supabase Realtime(Postgres Changes)
 - 관리자 쓰기 경로: Supabase Edge Functions
 - 관리자 인증: Edge Function이 `ADMIN_PASSWORD` 서버측 secret과 비교
 - 관리자 세션: 24시간 유효한 서명 토큰을 `localStorage`에 저장
@@ -127,6 +128,8 @@ window.__APP_CONFIG__ = {
 3. `Project URL`을 `config.js`의 `supabaseUrl`에 넣습니다.
 4. `anon public key`를 `config.js`의 `supabaseAnonKey`에 넣습니다.
 
+실시간 갱신까지 사용하려면 별도로 [SUPABASE_REALTIME_SETUP.md](/mnt/c/Users/USER/Desktop/FE/30s_Leaderboard/SUPABASE_REALTIME_SETUP.md)도 확인하세요.
+
 ## 7. SQL 적용 방법
 
 1. Supabase Dashboard에서 `SQL Editor`를 엽니다.
@@ -144,6 +147,7 @@ window.__APP_CONFIG__ = {
 - direct write 차단 구조
 - 같은 팀 경기 금지
 - 같은 팀 조합 중복 금지
+- Realtime publication 등록
 
 ## 8. Edge Function 배포 방법
 

@@ -4,6 +4,7 @@ export const LEAGUE_ASSET_BUCKET = "league-assets";
 export const LEAGUE_ASSET_KEY = "match_order";
 const LEAGUE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const LEAGUE_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const LEAGUE_REALTIME_TABLES = ["teams", "matches", "league_assets"];
 
 let supabaseClient = null;
 
@@ -112,6 +113,33 @@ export async function fetchLeagueData() {
     fetchLeagueAsset(),
   ]);
   return { teams, matches, leagueAsset };
+}
+
+export function subscribeToLeagueRealtime(onChange) {
+  if (typeof onChange !== "function") {
+    throw createClientError("실시간 구독 콜백이 필요합니다.");
+  }
+
+  const supabase = getSupabaseClient();
+  const channel = supabase.channel(`league-live-${crypto.randomUUID()}`);
+
+  LEAGUE_REALTIME_TABLES.forEach((table) => {
+    channel.on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table,
+      },
+      onChange
+    );
+  });
+
+  void channel.subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }
 
 export async function verifyAdminPassword(password) {
