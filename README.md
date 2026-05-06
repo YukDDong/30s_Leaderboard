@@ -1,6 +1,6 @@
 # Tennis League Board
 
-GitHub Pages에 그대로 배포할 수 있는 정적 프론트와 Supabase DB + Edge Functions를 결합한 테니스 리그 보드입니다.  
+GitHub Pages에 배포할 수 있는 React/Vite 프론트와 Supabase DB + Edge Functions를 결합한 테니스 리그 보드입니다.  
 보기 전용 페이지와 관리자 페이지를 분리했고, 관리자 비밀번호 검증과 쓰기 작업은 모두 서버측 검증 경로를 거치도록 구성했습니다.
 
 ## 1. 프로젝트 소개
@@ -13,11 +13,12 @@ GitHub Pages에 그대로 배포할 수 있는 정적 프론트와 Supabase DB +
 - 승점 규칙: 승 3 / 무 1 / 패 0
 - 정렬 기준: 승점 내림차순 -> 득실차 내림차순
 
-기존 프로젝트의 카드형 UI, 반응형 레이아웃, 교차표형 경기 표시, 모달 점수 입력 흐름, 순위 계산 규칙은 유지하고 데이터 저장소만 `localStorage` 중심에서 Supabase 중심 구조로 확장했습니다.
+기존 프로젝트의 카드형 UI, 반응형 레이아웃, 교차표형 경기 표시, 모달 점수 입력 흐름, 순위 계산 규칙은 유지하면서 React 컴포넌트 기반 구조로 전환했습니다.
 
 ## 2. 현재 아키텍처 설명
 
-- 프론트 배포: GitHub Pages
+- 프론트: React + Vite
+- 프론트 배포: GitHub Pages / GitHub Actions
 - 읽기 저장소: Supabase Database + Supabase Storage(public bucket)
 - 실시간 갱신: Supabase Realtime(Postgres Changes)
 - 관리자 쓰기 경로: Supabase Edge Functions
@@ -27,7 +28,7 @@ GitHub Pages에 그대로 배포할 수 있는 정적 프론트와 Supabase DB +
 구성도는 아래와 같습니다.
 
 ```text
-GitHub Pages (index.html / admin.html)
+GitHub Pages (React build: index.html / admin.html)
   -> public config.js
   -> Supabase anon key로 read
   -> verify-admin-password Edge Function 호출
@@ -75,13 +76,26 @@ Supabase
 /
   index.html
   admin.html
+  package.json
+  vite.config.js
   style.css
-  config.js
+  public/
+    config.js
+    .nojekyll
+  src/
+    admin.jsx
+    viewer.jsx
+    components.jsx
+    league.js
+    supabaseClient.js
   config.example.js
   app.js
-  viewer.js
   admin.js
+  viewer.js
   supabase-client.js
+  .github/
+    workflows/
+      deploy.yml
   README.md
   supabase/
     schema.sql
@@ -95,11 +109,38 @@ Supabase
         index.ts
 ```
 
-## 5. 프론트 설정 방법
+## 5. 로컬 실행 및 빌드
+
+```bash
+npm ci
+npm run dev
+```
+
+프로덕션 빌드는 아래 명령으로 확인합니다.
+
+```bash
+npm run build
+```
+
+## 6. GitHub Pages 배포 방법
+
+이 저장소는 `main` 브랜치에 push하면 `.github/workflows/deploy.yml`이 `dist` 산출물을 GitHub Pages로 배포하도록 설정되어 있습니다.
+
+1. GitHub 저장소 `Settings -> Pages`에서 `Source`를 `GitHub Actions`로 설정합니다.
+2. 변경사항을 `main` 브랜치에 push합니다.
+3. Actions 완료 후 `https://YukDDong.github.io/30s_Leaderboard/`에서 확인합니다.
+
+수동 배포가 필요하면 아래 명령도 사용할 수 있습니다.
+
+```bash
+npm run deploy
+```
+
+## 7. 프론트 설정 방법
 
 프론트에는 공개 가능한 값만 넣습니다.
 
-`config.js`
+`public/config.js`
 
 ```js
 window.__APP_CONFIG__ = {
@@ -121,7 +162,7 @@ window.__APP_CONFIG__ = {
 
 `config.js` 값이 비어 있으면 viewer/admin 페이지 모두 개발자 친화적인 경고 메시지를 표시합니다.
 
-## 6. Supabase 프로젝트 생성 방법
+## 8. Supabase 프로젝트 생성 방법
 
 1. Supabase에서 새 프로젝트를 생성합니다.
 2. 프로젝트 생성이 끝나면 `Project Settings -> API`에서 아래 값을 확인합니다.
@@ -130,7 +171,7 @@ window.__APP_CONFIG__ = {
 
 실시간 갱신까지 사용하려면 별도로 [SUPABASE_REALTIME_SETUP.md](/mnt/c/Users/USER/Desktop/FE/30s_Leaderboard/SUPABASE_REALTIME_SETUP.md)도 확인하세요.
 
-## 7. SQL 적용 방법
+## 9. SQL 적용 방법
 
 1. Supabase Dashboard에서 `SQL Editor`를 엽니다.
 2. 이 저장소의 [schema.sql](/mnt/c/Users/USER/Desktop/FE/30s_Leaderboard/supabase/schema.sql) 내용을 붙여 넣습니다.
@@ -149,7 +190,7 @@ window.__APP_CONFIG__ = {
 - 같은 팀 조합 중복 금지
 - Realtime publication 등록
 
-## 8. Edge Function 배포 방법
+## 10. Edge Function 배포 방법
 
 Supabase CLI가 설치되어 있다고 가정합니다.
 
