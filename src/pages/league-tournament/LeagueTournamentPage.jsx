@@ -1,5 +1,10 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { getRouteHref } from "../../app/router.js";
+import { Message } from "../../shared/components.jsx";
+import {
+  getMissingConfigKeys,
+  isSupabaseConfigured,
+} from "../../shared/supabaseClient.js";
 import {
   ChampionCard,
   GroupStandingsTable,
@@ -7,18 +12,24 @@ import {
   PreliminaryGroups,
   PreliminaryMatchList,
   SixTeamTournamentBracket,
+  WorkflowProgress,
 } from "../../features/league-tournament/components/LeagueTournamentComponents.jsx";
 import {
   areStandingsFinal,
   calculateGroupStandings,
-  createTwoGroups,
   findChampion,
   generateSixTeamTournamentBracket,
-  generateThreeTeamRoundRobinMatches,
   normalizeLeagueTournamentScore,
   updateTournamentWinner,
   validateLeagueTournamentInput,
 } from "../../features/league-tournament/lib/leagueTournament.js";
+import {
+  createLeagueTournamentRecord,
+  fetchLatestLeagueTournamentRecord,
+  savePreliminaryMatchRecord,
+  saveTournamentMatchRecords,
+  updateLeagueTournamentRecordStatus,
+} from "../../features/league-tournament/lib/leagueTournamentRepository.js";
 
 const initialTeams = Array.from({ length: 6 }, (_, index) => ({
   id: `team-${index + 1}`,
@@ -37,6 +48,10 @@ export default function LeagueTournamentPage() {
   const [preliminaryMessage, setPreliminaryMessage] = useState({ text: "", tone: "warning" });
   const [tournamentMatches, setTournamentMatches] = useState([]);
   const [tournamentMessage, setTournamentMessage] = useState({ text: "", tone: "warning" });
+  const [currentTournamentId, setCurrentTournamentId] = useState("");
+  const [dbMessage, setDbMessage] = useState({ text: "", tone: "warning" });
+  const [isHydrating, setIsHydrating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const groupA = groups.find((group) => group.id === "A") || null;
   const groupB = groups.find((group) => group.id === "B") || null;
@@ -50,6 +65,92 @@ export default function LeagueTournamentPage() {
   );
   const standingsReady = areStandingsFinal(groupAStandings) && areStandingsFinal(groupBStandings);
   const champion = findChampion(tournamentMatches);
+  const hasGeneratedTournament = groups.length > 0;
+  const preliminaryCompletedCount = preliminaryMatches.filter(
+    (match) => match.status === "completed"
+  ).length;
+  const tournamentCompletedCount = tournamentMatches.filter(
+    (match) => match.status === "completed"
+  ).length;
+  const hasTiebreakReview = [...groupAStandings, ...groupBStandings].some(
+    (row) => row.needsTiebreakReview
+  );
+  const flowStep = champion
+    ? "complete"
+    : standingsReady
+      ? "tournament"
+      : hasGeneratedTournament
+        ? "preliminary"
+        : "setup";
+  const configMissing = !isSupabaseConfigured();
+
+  function applyTournamentRecord(record) {
+    if (!record) {
+      setCurrentTournamentId("");
+      setGeneratedTournamentName("");
+      setGroups([]);
+      setPreliminaryMatches([]);
+      setTournamentMatches([]);
+      return;
+    }
+
+    setCurrentTournamentId(record.tournament.id);
+    setTournamentName(record.tournament.name);
+    setTeamInputs(record.teams);
+    setGeneratedTournamentName(record.tournament.name);
+    setGroups(record.groups);
+    setPreliminaryMatches(record.preliminaryMatches);
+    setTournamentMatches(record.tournamentMatches);
+    setValidation({ errors: [], warnings: [], isValid: true });
+  }
+
+  useEffect(() => {
+    if (!isSupabaseConfigured()) {
+      const missingKeys = getMissingConfigKeys().join(", ");
+      setDbMessage({
+        text: `Supabase 설정이 비어 있습니다. config.js의 ${missingKeys} 값을 채운 뒤 운영표를 생성할 수 있습니다.`,
+        tone: "warning",
+      });
+      return;
+    }
+
+    let isActive = true;
+    setIsHydrating(true);
+    setDbMessage({ text: "저장된 리그 & 토너먼트 대회를 불러오는 중입니다.", tone: "warning" });
+
+    fetchLatestLeagueTournamentRecord()
+      .then((record) => {
+        if (!isActive) {
+          return;
+        }
+
+        applyTournamentRecord(record);
+        setDbMessage(
+          record
+            ? { text: "DB에 저장된 최신 운영표를 불러왔습니다.", tone: "success" }
+            : { text: "저장된 운영표가 없습니다. 대회 정보를 입력해 운영표를 생성하세요.", tone: "warning" }
+        );
+      })
+      .catch((error) => {
+        if (!isActive) {
+          return;
+        }
+
+        setDbMessage({
+          text: error.message || "리그 & 토너먼트 데이터를 불러오지 못했습니다.",
+          tone: "danger",
+        });
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsHydrating(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   function handleTeamChange(teamId, field, value) {
     setTeamInputs((currentTeams) =>
@@ -57,7 +158,7 @@ export default function LeagueTournamentPage() {
     );
   }
 
-  function handleGenerate(event) {
+  async function handleGenerate(event) {
     event.preventDefault();
 
     const trimmedTeams = teamInputs.map((team) => ({
@@ -73,23 +174,37 @@ export default function LeagueTournamentPage() {
       return;
     }
 
-    const nextGroups = createTwoGroups(trimmedTeams);
-    const nextPreliminaryMatches = nextGroups.flatMap(generateThreeTeamRoundRobinMatches);
-    const nextTournamentMatches = generateSixTeamTournamentBracket([], []);
+    if (configMissing) {
+      setDbMessage({
+        text: "Supabase 설정이 없어 운영표를 DB에 저장할 수 없습니다.",
+        tone: "danger",
+      });
+      return;
+    }
 
-    setTeamInputs(trimmedTeams);
-    setGeneratedTournamentName(tournamentName.trim());
-    setGroups(nextGroups);
-    setPreliminaryMatches(nextPreliminaryMatches);
-    setPreliminaryMessage({
-      text: "운영표를 생성했습니다. 예선 점수를 입력하면 순위와 본선 대진표가 자동 갱신됩니다.",
-      tone: "success",
-    });
-    setTournamentMatches(nextTournamentMatches);
-    setTournamentMessage({ text: "", tone: "warning" });
+    setIsSaving(true);
+    setDbMessage({ text: "운영표를 DB에 저장하는 중입니다.", tone: "warning" });
+
+    try {
+      const record = await createLeagueTournamentRecord(tournamentName, trimmedTeams);
+      applyTournamentRecord(record);
+      setPreliminaryMessage({
+        text: "운영표를 생성했습니다. 예선 점수를 입력하면 순위와 본선 대진표가 자동 갱신됩니다.",
+        tone: "success",
+      });
+      setTournamentMessage({ text: "", tone: "warning" });
+      setDbMessage({ text: "운영표가 DB에 저장되었습니다.", tone: "success" });
+    } catch (error) {
+      setDbMessage({
+        text: error.message || "운영표를 DB에 저장하지 못했습니다.",
+        tone: "danger",
+      });
+    } finally {
+      setIsSaving(false);
+    }
   }
 
-  function handlePreliminaryScoreChange(matchId, field, value) {
+  async function handlePreliminaryScoreChange(matchId, field, value) {
     const parsedScore = normalizeLeagueTournamentScore(value);
 
     if (value !== "" && parsedScore === null) {
@@ -136,11 +251,15 @@ export default function LeagueTournamentPage() {
     const nextGroupAStandings = groupA ? calculateGroupStandings(groupA, nextMatches) : [];
     const nextGroupBStandings = groupB ? calculateGroupStandings(groupB, nextMatches) : [];
     const didCompleteAllStandings = areStandingsFinal(nextGroupAStandings) && areStandingsFinal(nextGroupBStandings);
+    const nextTournamentMatches = groupA && groupB
+      ? generateSixTeamTournamentBracket(nextGroupAStandings, nextGroupBStandings)
+      : tournamentMatches;
+    const changedMatch = nextMatches.find((match) => match.id === matchId);
 
     setPreliminaryMatches(nextMatches);
 
     if (groupA && groupB) {
-      setTournamentMatches(generateSixTeamTournamentBracket(nextGroupAStandings, nextGroupBStandings));
+      setTournamentMatches(nextTournamentMatches);
     }
 
     if (hasTie) {
@@ -157,9 +276,32 @@ export default function LeagueTournamentPage() {
       });
       setTournamentMessage({ text: "", tone: "warning" });
     }
+
+    if (!currentTournamentId || !changedMatch || configMissing) {
+      return;
+    }
+
+    try {
+      await savePreliminaryMatchRecord(changedMatch);
+
+      if (groupA && groupB) {
+        await saveTournamentMatchRecords(currentTournamentId, nextTournamentMatches);
+        await updateLeagueTournamentRecordStatus(
+          currentTournamentId,
+          didCompleteAllStandings ? "tournament" : "preliminary"
+        );
+      }
+
+      setDbMessage({ text: "경기 결과가 DB에 저장되었습니다.", tone: "success" });
+    } catch (error) {
+      setDbMessage({
+        text: error.message || "예선 경기 결과를 DB에 저장하지 못했습니다.",
+        tone: "danger",
+      });
+    }
   }
 
-  function handleTournamentScoreSave(matchId, rawTeam1Score, rawTeam2Score) {
+  async function handleTournamentScoreSave(matchId, rawTeam1Score, rawTeam2Score) {
     const team1Score = normalizeLeagueTournamentScore(rawTeam1Score);
     const team2Score = normalizeLeagueTournamentScore(rawTeam2Score);
 
@@ -169,13 +311,26 @@ export default function LeagueTournamentPage() {
     }
 
     try {
-      setTournamentMatches((currentMatches) =>
-        updateTournamentWinner(currentMatches, matchId, team1Score, team2Score)
-      );
+      const nextMatches = updateTournamentWinner(tournamentMatches, matchId, team1Score, team2Score);
+      const nextChampion = findChampion(nextMatches);
+      setTournamentMatches(nextMatches);
       setTournamentMessage({ text: "토너먼트 결과를 반영했습니다.", tone: "success" });
+
+      if (currentTournamentId && !configMissing) {
+        await saveTournamentMatchRecords(currentTournamentId, nextMatches);
+        await updateLeagueTournamentRecordStatus(
+          currentTournamentId,
+          nextChampion ? "completed" : "tournament"
+        );
+        setDbMessage({ text: "본선 결과가 DB에 저장되었습니다.", tone: "success" });
+      }
     } catch (error) {
       setTournamentMessage({
         text: error.message || "토너먼트 결과 반영 중 오류가 발생했습니다.",
+        tone: "danger",
+      });
+      setDbMessage({
+        text: error.message || "본선 결과를 DB에 저장하지 못했습니다.",
         tone: "danger",
       });
     }
@@ -199,11 +354,39 @@ export default function LeagueTournamentPage() {
       </header>
 
       <main className="main-grid">
+        {dbMessage.text ? (
+          <section className="panel status-panel" aria-live="polite">
+            <Message className="status-banner" message={dbMessage} />
+          </section>
+        ) : null}
+
+        <WorkflowProgress
+          champion={champion}
+          flowStep={flowStep}
+          hasGeneratedTournament={hasGeneratedTournament}
+          hasTiebreakReview={hasTiebreakReview}
+          preliminaryCompletedCount={preliminaryCompletedCount}
+          preliminaryTotalCount={preliminaryMatches.length}
+          standingsReady={standingsReady}
+          tournamentCompletedCount={tournamentCompletedCount}
+          tournamentTotalCount={tournamentMatches.length}
+        />
+
         <LeagueTournamentForm
+          defaultOpen={!hasGeneratedTournament || validation.errors.length > 0}
+          disabled={isHydrating || isSaving || configMissing}
           errors={validation.errors}
+          isSubmitting={isSaving}
           onGenerate={handleGenerate}
           onTeamChange={handleTeamChange}
           onTournamentNameChange={setTournamentName}
+          resetKey={`${generatedTournamentName || "new"}-${flowStep}`}
+          statusLabel={
+            validation.errors.length > 0 ? "확인 필요" : hasGeneratedTournament ? "완료" : "진행 중"
+          }
+          statusTone={
+            validation.errors.length > 0 ? "danger" : hasGeneratedTournament ? "success" : "active"
+          }
           teams={teamInputs}
           tournamentName={tournamentName}
           warnings={validation.warnings}
@@ -240,19 +423,67 @@ export default function LeagueTournamentPage() {
           </section>
         ) : null}
 
-        <PreliminaryGroups groups={groups} />
+        <PreliminaryGroups
+          defaultOpen={false}
+          groups={groups}
+          resetKey={`${generatedTournamentName}-${flowStep}`}
+          statusLabel="완료"
+          statusTone="success"
+        />
         <PreliminaryMatchList
+          defaultOpen={hasGeneratedTournament && !standingsReady}
           groups={groups}
           matches={preliminaryMatches}
           message={preliminaryMessage}
+          resetKey={`${generatedTournamentName}-${flowStep}`}
+          statusLabel={standingsReady ? "완료" : "진행 중"}
+          statusTone={standingsReady ? "success" : "active"}
           onScoreChange={handlePreliminaryScoreChange}
         />
 
         {groups.length > 0 && groupA ? (
-          <GroupStandingsTable group={groupA} standings={groupAStandings} />
+          <GroupStandingsTable
+            defaultOpen={!champion}
+            group={groupA}
+            resetKey={`${generatedTournamentName}-${flowStep}`}
+            standings={groupAStandings}
+            statusLabel={
+              groupAStandings.some((row) => row.needsTiebreakReview)
+                ? "확인 필요"
+                : standingsReady
+                  ? "확정"
+                  : "계산 중"
+            }
+            statusTone={
+              groupAStandings.some((row) => row.needsTiebreakReview)
+                ? "danger"
+                : standingsReady
+                  ? "success"
+                  : "active"
+            }
+          />
         ) : null}
         {groups.length > 0 && groupB ? (
-          <GroupStandingsTable group={groupB} standings={groupBStandings} />
+          <GroupStandingsTable
+            defaultOpen={!champion}
+            group={groupB}
+            resetKey={`${generatedTournamentName}-${flowStep}`}
+            standings={groupBStandings}
+            statusLabel={
+              groupBStandings.some((row) => row.needsTiebreakReview)
+                ? "확인 필요"
+                : standingsReady
+                  ? "확정"
+                  : "계산 중"
+            }
+            statusTone={
+              groupBStandings.some((row) => row.needsTiebreakReview)
+                ? "danger"
+                : standingsReady
+                  ? "success"
+                  : "active"
+            }
+          />
         ) : null}
 
         {groups.length > 0 && !standingsReady ? (
@@ -264,9 +495,13 @@ export default function LeagueTournamentPage() {
         ) : null}
 
         <SixTeamTournamentBracket
+          defaultOpen={standingsReady && !champion}
           matches={tournamentMatches}
           message={tournamentMessage}
+          resetKey={`${generatedTournamentName}-${flowStep}`}
           standingsReady={standingsReady}
+          statusLabel={!standingsReady ? "대기" : champion ? "완료" : "진행 중"}
+          statusTone={!standingsReady ? "neutral" : champion ? "success" : "active"}
           onSaveScore={handleTournamentScoreSave}
         />
         <ChampionCard champion={champion} />

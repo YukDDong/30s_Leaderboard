@@ -2,27 +2,36 @@ import React, { useEffect, useState } from "react";
 import { Message } from "../../../shared/components.jsx";
 
 export function LeagueTournamentForm({
+  defaultOpen = true,
+  disabled = false,
   errors,
+  isSubmitting = false,
   onGenerate,
   onTeamChange,
   onTournamentNameChange,
+  resetKey,
+  statusLabel,
+  statusTone,
   teams,
   tournamentName,
   warnings,
 }) {
   return (
-    <section className="panel wide-panel" aria-labelledby="league-tournament-form-heading">
-      <div className="section-header">
-        <div>
-          <p className="section-kicker">Setup</p>
-          <h2 id="league-tournament-form-heading">대회 정보 입력</h2>
-        </div>
-      </div>
-
+    <CollapsiblePanel
+      defaultOpen={defaultOpen}
+      headingId="league-tournament-form-heading"
+      kicker="Setup"
+      resetKey={resetKey}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      summary={tournamentName ? tournamentName : "대회명과 복식 팀 6개를 입력합니다."}
+      title="대회 정보 입력"
+    >
       <form className="league-tournament-form" noValidate onSubmit={onGenerate}>
         <label className="input-group">
           <span>대회명</span>
           <input
+            disabled={disabled}
             maxLength="50"
             placeholder="예: 5월 정기 복식 리그"
             type="text"
@@ -38,6 +47,7 @@ export function LeagueTournamentForm({
               <label className="input-group">
                 <span>팀명</span>
                 <input
+                  disabled={disabled}
                   maxLength="30"
                   placeholder="예: 강동 에이스"
                   type="text"
@@ -49,6 +59,7 @@ export function LeagueTournamentForm({
                 <label className="input-group">
                   <span>선수 1 이름</span>
                   <input
+                    disabled={disabled}
                     maxLength="20"
                     placeholder="선수 1"
                     type="text"
@@ -59,6 +70,7 @@ export function LeagueTournamentForm({
                 <label className="input-group">
                   <span>선수 2 이름</span>
                   <input
+                    disabled={disabled}
                     maxLength="20"
                     placeholder="선수 2"
                     type="text"
@@ -72,34 +84,42 @@ export function LeagueTournamentForm({
         </div>
 
         <div className="league-form-footer">
-          <button className="primary-button" type="submit">
-            운영표 생성
+          <button className="primary-button" disabled={disabled || isSubmitting} type="submit">
+            {isSubmitting ? "저장 중" : "운영표 생성"}
           </button>
         </div>
       </form>
 
       <MessageList items={errors} tone="danger" />
       <MessageList items={warnings} tone="warning" />
-    </section>
+    </CollapsiblePanel>
   );
 }
 
-export function PreliminaryGroups({ groups }) {
+export function PreliminaryGroups({
+  defaultOpen = true,
+  groups,
+  resetKey,
+  statusLabel,
+  statusTone,
+}) {
   if (groups.length === 0) {
     return null;
   }
 
   return (
-    <section className="panel wide-panel" aria-labelledby="preliminary-groups-heading">
-      <div className="section-header">
-        <div>
-          <p className="section-kicker">Groups</p>
-          <h2 id="preliminary-groups-heading">조 편성</h2>
-        </div>
-        <p className="section-description">입력 순서 기준: 앞 3팀 A조, 뒤 3팀 B조</p>
-      </div>
-
-      <div className="league-group-grid">
+    <CollapsiblePanel
+      defaultOpen={defaultOpen}
+      description="입력 순서 기준: 앞 3팀 A조, 뒤 3팀 B조"
+      headingId="preliminary-groups-heading"
+      kicker="Groups"
+      resetKey={resetKey}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      summary="A/B조 편성 결과"
+      title="조 편성"
+    >
+      <div className="league-group-grid league-preliminary-match-grid">
         {groups.map((group) => (
           <article className="league-group-card" key={group.id}>
             <h3>{group.name}</h3>
@@ -119,24 +139,35 @@ export function PreliminaryGroups({ groups }) {
           </article>
         ))}
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
 
-export function PreliminaryMatchList({ groups, matches, message, onScoreChange }) {
+export function PreliminaryMatchList({
+  defaultOpen = true,
+  groups,
+  matches,
+  message,
+  onScoreChange,
+  resetKey,
+  statusLabel,
+  statusTone,
+}) {
   if (groups.length === 0) {
     return null;
   }
 
   return (
-    <section className="panel wide-panel" aria-labelledby="preliminary-matches-heading">
-      <div className="section-header">
-        <div>
-          <p className="section-kicker">Preliminary</p>
-          <h2 id="preliminary-matches-heading">예선 경기 결과</h2>
-        </div>
-      </div>
-
+    <CollapsiblePanel
+      defaultOpen={defaultOpen}
+      headingId="preliminary-matches-heading"
+      kicker="Preliminary"
+      resetKey={resetKey}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      summary={`${matches.filter((match) => match.status === "completed").length}/${matches.length} 경기 입력 완료`}
+      title="예선 경기 결과"
+    >
       <div className="league-group-grid">
         {groups.map((group) => (
           <article className="league-match-card" key={group.id}>
@@ -169,20 +200,29 @@ export function PreliminaryMatchList({ groups, matches, message, onScoreChange }
         ))}
       </div>
       <Message message={message} />
-    </section>
+    </CollapsiblePanel>
   );
 }
 
-export function GroupStandingsTable({ group, standings }) {
+export function GroupStandingsTable({
+  defaultOpen = true,
+  group,
+  resetKey,
+  standings,
+  statusLabel,
+  statusTone,
+}) {
   return (
-    <section className="panel wide-panel" aria-labelledby={`standings-${group.id}-heading`}>
-      <div className="section-header">
-        <div>
-          <p className="section-kicker">Standings</p>
-          <h2 id={`standings-${group.id}-heading`}>{group.name} 순위표</h2>
-        </div>
-      </div>
-
+    <CollapsiblePanel
+      defaultOpen={defaultOpen}
+      headingId={`standings-${group.id}-heading`}
+      kicker="Standings"
+      resetKey={resetKey}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      summary={formatStandingsSummary(standings)}
+      title={`${group.name} 순위표`}
+    >
       <div className="table-wrap">
         <table className="standings-table league-standings-table">
           <thead>
@@ -215,11 +255,20 @@ export function GroupStandingsTable({ group, standings }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </CollapsiblePanel>
   );
 }
 
-export function SixTeamTournamentBracket({ message, matches, onSaveScore, standingsReady }) {
+export function SixTeamTournamentBracket({
+  defaultOpen = true,
+  message,
+  matches,
+  onSaveScore,
+  resetKey,
+  standingsReady,
+  statusLabel,
+  statusTone,
+}) {
   if (matches.length === 0) {
     return null;
   }
@@ -231,17 +280,17 @@ export function SixTeamTournamentBracket({ message, matches, onSaveScore, standi
   ];
 
   return (
-    <section className="panel wide-panel" aria-labelledby="tournament-bracket-heading">
-      <div className="section-header">
-        <div>
-          <p className="section-kicker">Tournament</p>
-          <h2 id="tournament-bracket-heading">본선 대진표</h2>
-        </div>
-        <p className="section-description">
-          {standingsReady ? "예선 순위 확정 완료" : "예선 순위 확정 전 placeholder 표시"}
-        </p>
-      </div>
-
+    <CollapsiblePanel
+      defaultOpen={defaultOpen}
+      description={standingsReady ? "예선 순위 확정 완료" : "예선 순위 확정 전 placeholder 표시"}
+      headingId="tournament-bracket-heading"
+      kicker="Tournament"
+      resetKey={resetKey}
+      statusLabel={statusLabel}
+      statusTone={statusTone}
+      summary={formatTournamentSummary(matches, standingsReady)}
+      title="본선 대진표"
+    >
       <div className="league-bracket-grid">
         {roundGroups.map((round) => (
           <div className="league-round-column" key={round.id}>
@@ -259,6 +308,75 @@ export function SixTeamTournamentBracket({ message, matches, onSaveScore, standi
         ))}
       </div>
       <Message message={message} />
+    </CollapsiblePanel>
+  );
+}
+
+export function WorkflowProgress({
+  champion,
+  flowStep,
+  hasGeneratedTournament,
+  hasTiebreakReview,
+  preliminaryCompletedCount,
+  preliminaryTotalCount,
+  standingsReady,
+  tournamentCompletedCount,
+  tournamentTotalCount,
+}) {
+  const steps = [
+    {
+      id: "setup",
+      label: "대회 정보",
+      detail: hasGeneratedTournament ? "운영표 생성 완료" : "팀 6개 입력",
+      state: hasGeneratedTournament ? "done" : "current",
+    },
+    {
+      id: "preliminary",
+      label: "예선",
+      detail:
+        preliminaryTotalCount > 0
+          ? `${preliminaryCompletedCount}/${preliminaryTotalCount} 경기`
+          : "대기",
+      state: !hasGeneratedTournament ? "pending" : standingsReady ? "done" : "current",
+    },
+    {
+      id: "tournament",
+      label: "본선",
+      detail:
+        tournamentTotalCount > 0
+          ? `${tournamentCompletedCount}/${tournamentTotalCount} 경기`
+          : "대기",
+      state: !standingsReady ? "pending" : champion ? "done" : "current",
+    },
+    {
+      id: "complete",
+      label: "우승",
+      detail: champion ? champion.name : "미정",
+      state: champion ? "done" : "pending",
+    },
+  ];
+
+  return (
+    <section className="panel wide-panel workflow-panel" aria-labelledby="workflow-heading">
+      <div className="section-header">
+        <div>
+          <p className="section-kicker">Progress</p>
+          <h2 id="workflow-heading">진행 단계</h2>
+        </div>
+        <p className="section-description">{getNextActionText(flowStep, hasTiebreakReview, champion)}</p>
+      </div>
+
+      <ol className="workflow-steps" aria-label="대회 진행 단계">
+        {steps.map((step, index) => (
+          <li className="workflow-step" data-state={step.state} key={step.id}>
+            <span className="workflow-step-index">{index + 1}</span>
+            <span className="workflow-step-copy">
+              <strong>{step.label}</strong>
+              <span>{step.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
@@ -318,6 +436,62 @@ function TournamentMatchCard({ match, onSaveScore }) {
         </span>
       </div>
     </article>
+  );
+}
+
+function CollapsiblePanel({
+  children,
+  defaultOpen,
+  description = "",
+  headingId,
+  kicker,
+  resetKey,
+  statusLabel,
+  statusTone = "neutral",
+  summary,
+  title,
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  useEffect(() => {
+    setIsOpen(defaultOpen);
+  }, [defaultOpen, resetKey]);
+
+  return (
+    <section className={`panel wide-panel collapsible-panel ${isOpen ? "open" : "closed"}`}>
+      <button
+        aria-controls={`${headingId}-body`}
+        aria-expanded={isOpen}
+        className="collapsible-panel-toggle"
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+      >
+        <span className="collapsible-panel-title">
+          <span className="section-kicker">{kicker}</span>
+          <span id={headingId} className="collapsible-panel-heading">
+            {title}
+          </span>
+        </span>
+        <span className="collapsible-panel-meta">
+          {statusLabel ? (
+            <span className="collapsible-status-badge" data-tone={statusTone}>
+              {statusLabel}
+            </span>
+          ) : null}
+          {summary ? <span className="collapsible-panel-summary">{summary}</span> : null}
+          {description ? <span className="section-description">{description}</span> : null}
+          <span className="collapsible-panel-icon" aria-hidden="true">
+            {isOpen ? "접기" : "열기"}
+          </span>
+        </span>
+      </button>
+
+      {isOpen ? (
+        <div className="collapsible-panel-body" id={`${headingId}-body`}>
+          {children}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -439,6 +613,56 @@ function formatRank(row) {
   }
 
   return row.rank === null ? "-" : row.rank;
+}
+
+function formatStandingsSummary(standings) {
+  const reviewCount = standings.filter((row) => row.needsTiebreakReview).length;
+
+  if (reviewCount > 0) {
+    return `동률 확인 필요 ${reviewCount}팀`;
+  }
+
+  const rankedCount = standings.filter((row) => row.rank !== null).length;
+
+  if (rankedCount === standings.length && standings.length > 0) {
+    return "순위 확정";
+  }
+
+  return "예선 진행 중";
+}
+
+function formatTournamentSummary(matches, standingsReady) {
+  if (!standingsReady) {
+    return "예선 순위 확정 후 사용";
+  }
+
+  const completedCount = matches.filter((match) => match.status === "completed").length;
+
+  return `${completedCount}/${matches.length} 경기 입력 완료`;
+}
+
+function getNextActionText(flowStep, hasTiebreakReview, champion) {
+  if (champion) {
+    return `${champion.name} 우승 확정`;
+  }
+
+  if (hasTiebreakReview) {
+    return "동률 확인 필요 항목을 먼저 확인하세요.";
+  }
+
+  if (flowStep === "setup") {
+    return "대회명과 복식 팀 6개를 입력한 뒤 운영표를 생성하세요.";
+  }
+
+  if (flowStep === "preliminary") {
+    return "예선 경기 점수를 모두 입력하면 본선 대진이 확정됩니다.";
+  }
+
+  if (flowStep === "tournament") {
+    return "본선 점수를 입력하면 다음 라운드가 자동 반영됩니다.";
+  }
+
+  return "대회 진행 상태를 확인하세요.";
 }
 
 function formatNextRoundStatus(match) {
