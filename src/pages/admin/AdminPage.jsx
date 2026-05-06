@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
-import "../style.css";
+import { getRouteHref } from "../../app/router.js";
 import {
   ConfigNotice,
   MatchesMatrix,
@@ -8,14 +7,14 @@ import {
   StandingsTable,
   SummaryCards,
   TeamsList,
-} from "./components.jsx";
+} from "../../shared/components.jsx";
 import {
   findMatchById,
   formatFileSize,
   formatScoreValue,
   normalizeLeagueData,
   normalizeScore,
-} from "./league.js";
+} from "../../shared/league.js";
 import {
   callAdminFunction,
   cleanupUploadedLeagueAssetImage,
@@ -26,7 +25,7 @@ import {
   uploadLeagueAssetImage,
   validateLeagueImageFile,
   verifyAdminPassword,
-} from "./supabaseClient.js";
+} from "../../shared/supabaseClient.js";
 
 const SESSION_KEYS = {
   token: "admin_session_token",
@@ -46,7 +45,7 @@ const emptyMessages = {
   team: { text: "", tone: "warning" },
 };
 
-function AdminPage() {
+export default function AdminPage() {
   const [league, setLeague] = useState(emptyLeagueState);
   const [messages, setMessages] = useState(emptyMessages);
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -687,7 +686,10 @@ function AdminPage() {
               <p>관리자 세션은 24시간 유지되며, 만료되면 다시 비밀번호 인증이 필요합니다.</p>
             </div>
             <div className="hero-actions hero-actions-stack">
-              <a className="secondary-button button-link" href="./index.html">
+              <a className="secondary-button button-link" href={getRouteHref("/league-tournament")} data-router-link>
+                리그 & 토너먼트
+              </a>
+              <a className="secondary-button button-link" href={getRouteHref("/")} data-router-link>
                 보기 전용 페이지
               </a>
               <button
@@ -1049,5 +1051,3 @@ function MatchModal({
     </section>
   );
 }
-
-createRoot(document.getElementById("root")).render(<AdminPage />);

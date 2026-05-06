@@ -1,19 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
-import { createRoot } from "react-dom/client";
-import "../style.css";
-import { ConfigNotice, MatchesMatrix, Message, StandingsTable, SummaryCards } from "./components.jsx";
-import { normalizeLeagueData } from "./league.js";
+import { ConfigNotice, MatchesMatrix, Message, StandingsTable, SummaryCards } from "../../shared/components.jsx";
+import { normalizeLeagueData } from "../../shared/league.js";
+import { getRouteHref } from "../../app/router.js";
 import {
   fetchLeagueData,
   getMissingConfigKeys,
   isSupabaseConfigured,
   subscribeToLeagueRealtime,
-} from "./supabaseClient.js";
+} from "../../shared/supabaseClient.js";
 
 const REALTIME_REFRESH_DEBOUNCE_MS = 500;
 const emptyLeagueState = { teams: [], matches: [], leagueAsset: null };
 
-function ViewerPage() {
+export default function ViewerPage() {
   const [league, setLeague] = useState(emptyLeagueState);
   const [configNotice, setConfigNotice] = useState({ text: "", tone: "warning" });
   const [matchesMessage, setMatchesMessage] = useState({ text: "", tone: "warning" });
@@ -107,9 +106,14 @@ function ViewerPage() {
           <p className="hero-description">보기 전용 페이지입니다.</p>
         </div>
         <div className="viewer-hero-toolbar">
-          <a className="secondary-button button-link" href="./admin.html">
-            관리자 페이지
-          </a>
+          <div className="hero-actions">
+            <a className="secondary-button button-link" href={getRouteHref("/league-tournament")} data-router-link>
+              리그 & 토너먼트
+            </a>
+            <a className="secondary-button button-link" href={getRouteHref("/admin")} data-router-link>
+              관리자 페이지
+            </a>
+          </div>
         </div>
       </header>
 
@@ -170,5 +174,3 @@ function ViewerPage() {
     </div>
   );
 }
-
-createRoot(document.getElementById("root")).render(<ViewerPage />);

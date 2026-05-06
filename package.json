@@ -6,7 +6,8 @@
   "homepage": "https://YukDDong.github.io/30s_Leaderboard/",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/copy-spa-fallback.mjs",
+    "test": "node --test src/features/league-tournament/lib/leagueTournament.test.js",
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist"
   },

@@ -1028,6 +1028,214 @@ input[type="file"]:focus {
   line-height: 1.5;
 }
 
+.league-tournament-form {
+  display: grid;
+  gap: 18px;
+}
+
+.league-team-input-grid,
+.league-group-grid,
+.league-bracket-grid {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.league-team-input-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.league-team-fieldset,
+.league-group-card,
+.league-match-card,
+.league-tournament-match-card,
+.champion-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.league-team-fieldset {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 18px;
+}
+
+.league-team-fieldset legend {
+  padding: 0 8px;
+  color: var(--primary-soft);
+  font-weight: 800;
+}
+
+.league-player-input-grid,
+.league-score-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.league-form-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.league-message-list {
+  display: grid;
+  gap: 2px;
+}
+
+.league-message-list .inline-message {
+  margin-top: 8px;
+}
+
+.league-group-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.league-group-card,
+.league-match-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.league-group-card h3,
+.league-match-card h3,
+.league-round-column h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.league-player-line {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.league-match-list {
+  display: grid;
+  gap: 12px;
+}
+
+.league-match-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(260px, 1fr) minmax(120px, auto);
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.league-match-meta,
+.league-result-stack {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.league-score-grid {
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: end;
+}
+
+.league-score-form {
+  display: grid;
+  gap: 12px;
+}
+
+.league-score-form .secondary-button {
+  width: 100%;
+}
+
+.league-standings-table {
+  min-width: 920px;
+}
+
+.league-standings-table tbody tr[data-review="true"] {
+  background: var(--warning-bg);
+  color: var(--warning);
+  font-weight: 800;
+}
+
+.league-bracket-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
+.league-round-column {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.league-tournament-match-card {
+  display: grid;
+  gap: 14px;
+  min-height: 420px;
+  padding: 16px;
+}
+
+.league-bracket-team-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.league-team-slot {
+  display: grid;
+  gap: 4px;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.league-team-slot strong {
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.league-team-slot span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.champion-panel {
+  border-color: #bbf7d0;
+}
+
+.champion-card {
+  display: grid;
+  gap: 8px;
+  padding: 22px;
+  background: var(--success-bg);
+  border-color: #bbf7d0;
+}
+
+.champion-card strong {
+  color: var(--success);
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  letter-spacing: 0;
+}
+
+.champion-card span {
+  color: #14532d;
+}
+
+.league-status-value {
+  font-size: clamp(1.1rem, 2.4vw, 1.45rem);
+  letter-spacing: 0;
+}
+
 .modal-footer {
   display: flex;
   gap: 10px;
@@ -1074,15 +1282,23 @@ input[type="file"]:focus {
   .hero-card,
   .main-grid,
   .summary-grid,
-  .setup-grid {
+  .setup-grid,
+  .league-team-input-grid,
+  .league-group-grid,
+  .league-bracket-grid {
     grid-template-columns: 1fr;
   }
 
   .section-header,
   .action-card,
-  .team-item {
+  .team-item,
+  .league-match-row {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .league-match-row {
+    grid-template-columns: 1fr;
   }
 
   .section-description {
@@ -1159,7 +1375,8 @@ input[type="file"]:focus {
 
   .team-form,
   .auth-form,
-  .modal-score-grid {
+  .modal-score-grid,
+  .league-player-input-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1201,6 +1418,10 @@ input[type="file"]:focus {
   .modal-score-divider {
     padding: 0;
     text-align: center;
+  }
+
+  .league-score-grid {
+    grid-template-columns: 1fr;
   }
 
   .primary-button,
