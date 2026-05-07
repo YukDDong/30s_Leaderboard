@@ -452,6 +452,12 @@ input[type="file"]:focus {
   margin-bottom: 20px;
 }
 
+.section-scroll-anchor {
+  grid-column: 1 / -1;
+  height: 0;
+  scroll-margin-top: 18px;
+}
+
 .status-banner {
   min-height: 24px;
   margin: 0;
@@ -1254,6 +1260,164 @@ input[type="file"]:focus {
 .league-bracket-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: start;
+}
+
+.tournament-diagram-scroll {
+  width: 100%;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  -webkit-overflow-scrolling: touch;
+}
+
+.tournament-diagram {
+  position: relative;
+  width: 980px;
+  height: 470px;
+  min-width: 980px;
+}
+
+.tournament-diagram-lines {
+  position: absolute;
+  inset: 0;
+  width: 980px;
+  height: 470px;
+  pointer-events: none;
+}
+
+.tournament-diagram-lines path {
+  fill: none;
+  stroke: #94a3b8;
+  stroke-width: 2;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+}
+
+.tournament-diagram-round {
+  position: absolute;
+  top: 18px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 230px;
+  height: 38px;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.diagram-round-quarterfinal {
+  left: 8px;
+}
+
+.diagram-round-semifinal {
+  left: 334px;
+}
+
+.diagram-round-final {
+  left: 660px;
+}
+
+.tournament-diagram-round-title {
+  line-height: 1;
+}
+
+.tournament-diagram-node {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  gap: 7px;
+  width: 230px;
+  min-height: 96px;
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.tournament-diagram-node[data-complete="true"] {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.diagram-node-final {
+  top: 187px;
+  left: 660px;
+}
+
+.diagram-node-sf-1 {
+  top: 80px;
+  left: 334px;
+}
+
+.diagram-node-sf-2 {
+  top: 294px;
+  left: 334px;
+}
+
+.diagram-node-qf-1 {
+  top: 80px;
+  left: 8px;
+}
+
+.diagram-node-qf-2 {
+  top: 294px;
+  left: 8px;
+}
+
+.diagram-node-third {
+  top: 350px;
+  left: 660px;
+}
+
+.tournament-diagram-title {
+  display: block;
+  color: var(--primary-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.tournament-diagram-team {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.tournament-diagram-team[data-winner="true"] {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: var(--success);
+  font-weight: 800;
+}
+
+.tournament-diagram-team-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+}
+
+.tournament-diagram-score {
+  min-width: 18px;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-align: right;
 }
 
 .league-round-column {

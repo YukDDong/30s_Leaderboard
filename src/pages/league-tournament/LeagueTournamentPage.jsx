@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getRouteHref, ROUTES } from "../../app/router.js";
 import { Message } from "../../shared/components.jsx";
 import {
   getMissingConfigKeys,
   isSupabaseConfigured,
+  subscribeToLeagueTournamentRealtime,
 } from "../../shared/supabaseClient.js";
 import {
   FinalRankingsPanel,
@@ -22,10 +23,27 @@ import {
 } from "../../features/league-tournament/lib/leagueTournament.js";
 import { fetchLatestLeagueTournamentRecord } from "../../features/league-tournament/lib/leagueTournamentRepository.js";
 
+const REALTIME_REFRESH_DEBOUNCE_MS = 500;
+const FLOW_STEP_TRANSITION_DELAY_MS = 2800;
+const FLOW_STEP_ORDER = {
+  setup: 0,
+  preliminary: 1,
+  tournament: 2,
+  complete: 3,
+};
+
 export default function LeagueTournamentPage() {
   const [record, setRecord] = useState(null);
   const [message, setMessage] = useState({ text: "", tone: "warning" });
   const [isHydrating, setIsHydrating] = useState(false);
+  const isHydratingRef = useRef(false);
+  const hasPendingRefreshRef = useRef(false);
+  const refreshDebounceIdRef = useRef(null);
+  const hasHydratedOnceRef = useRef(false);
+  const shouldDelayNextFlowStepRef = useRef(false);
+  const flowStepTransitionTimeoutRef = useRef(null);
+  const pendingTransitionScrollRef = useRef(false);
+  const transitionedSectionAnchorRef = useRef(null);
 
   const groups = record?.groups || [];
   const preliminaryMatches = record?.preliminaryMatches || [];
@@ -61,6 +79,113 @@ export default function LeagueTournamentPage() {
       : hasGeneratedTournament
         ? "preliminary"
         : "setup";
+  const [displayFlowStep, setDisplayFlowStep] = useState(flowStep);
+  const isHoldingFlowStepTransition = displayFlowStep !== flowStep;
+
+  useEffect(() => {
+    if (flowStepTransitionTimeoutRef.current) {
+      window.clearTimeout(flowStepTransitionTimeoutRef.current);
+      flowStepTransitionTimeoutRef.current = null;
+    }
+
+    const displayOrder = FLOW_STEP_ORDER[displayFlowStep] ?? 0;
+    const nextOrder = FLOW_STEP_ORDER[flowStep] ?? 0;
+    const shouldDelayTransition = shouldDelayNextFlowStepRef.current && nextOrder > displayOrder;
+    shouldDelayNextFlowStepRef.current = false;
+
+    if (!shouldDelayTransition) {
+      setDisplayFlowStep(flowStep);
+      return undefined;
+    }
+
+    flowStepTransitionTimeoutRef.current = window.setTimeout(() => {
+      pendingTransitionScrollRef.current = true;
+      setDisplayFlowStep(flowStep);
+      flowStepTransitionTimeoutRef.current = null;
+    }, FLOW_STEP_TRANSITION_DELAY_MS);
+
+    return () => {
+      if (flowStepTransitionTimeoutRef.current) {
+        window.clearTimeout(flowStepTransitionTimeoutRef.current);
+        flowStepTransitionTimeoutRef.current = null;
+      }
+    };
+  }, [displayFlowStep, flowStep]);
+
+  useEffect(() => {
+    if (!pendingTransitionScrollRef.current || displayFlowStep !== flowStep) {
+      return;
+    }
+
+    pendingTransitionScrollRef.current = false;
+    window.requestAnimationFrame(() => {
+      transitionedSectionAnchorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [displayFlowStep, flowStep]);
+
+  async function hydrateLeagueTournamentPage({ showLoadingMessage = false } = {}) {
+    if (isHydratingRef.current) {
+      hasPendingRefreshRef.current = true;
+      return;
+    }
+
+    isHydratingRef.current = true;
+    setIsHydrating(true);
+
+    if (showLoadingMessage) {
+      setMessage({ text: "저장된 리그토너먼트 대회를 불러오는 중입니다.", tone: "warning" });
+    }
+
+    try {
+      const latestRecord = await fetchLatestLeagueTournamentRecord();
+      const nextFlowStep = getRecordFlowStep(latestRecord);
+      const currentFlowStep = getRecordFlowStep(record);
+
+      if (
+        hasHydratedOnceRef.current &&
+        nextFlowStep &&
+        currentFlowStep &&
+        (FLOW_STEP_ORDER[nextFlowStep] ?? 0) > (FLOW_STEP_ORDER[currentFlowStep] ?? 0)
+      ) {
+        shouldDelayNextFlowStepRef.current = true;
+      }
+
+      setRecord(latestRecord);
+      hasHydratedOnceRef.current = true;
+      setMessage(
+        latestRecord
+          ? { text: "", tone: "warning" }
+          : { text: "아직 공개할 리그토너먼트 운영표가 없습니다.", tone: "warning" }
+      );
+    } catch (error) {
+      setMessage({
+        text: error.message || "리그토너먼트 데이터를 불러오지 못했습니다.",
+        tone: "danger",
+      });
+    } finally {
+      setIsHydrating(false);
+      isHydratingRef.current = false;
+
+      if (hasPendingRefreshRef.current) {
+        hasPendingRefreshRef.current = false;
+        void hydrateLeagueTournamentPage();
+      }
+    }
+  }
+
+  function scheduleRealtimeRefresh() {
+    if (refreshDebounceIdRef.current) {
+      window.clearTimeout(refreshDebounceIdRef.current);
+    }
+
+    refreshDebounceIdRef.current = window.setTimeout(() => {
+      refreshDebounceIdRef.current = null;
+      void hydrateLeagueTournamentPage();
+    }, REALTIME_REFRESH_DEBOUNCE_MS);
+  }
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
@@ -69,44 +194,19 @@ export default function LeagueTournamentPage() {
         text: `Supabase 설정이 비어 있습니다. config.js의 ${missingKeys} 값을 채운 뒤 다시 새로고침해 주세요.`,
         tone: "warning",
       });
-      return;
+      return undefined;
     }
 
-    let isActive = true;
-    setIsHydrating(true);
-    setMessage({ text: "저장된 리그토너먼트 대회를 불러오는 중입니다.", tone: "warning" });
-
-    fetchLatestLeagueTournamentRecord()
-      .then((latestRecord) => {
-        if (!isActive) {
-          return;
-        }
-
-        setRecord(latestRecord);
-        setMessage(
-          latestRecord
-            ? { text: "", tone: "warning" }
-            : { text: "아직 공개할 리그토너먼트 운영표가 없습니다.", tone: "warning" }
-        );
-      })
-      .catch((error) => {
-        if (!isActive) {
-          return;
-        }
-
-        setMessage({
-          text: error.message || "리그토너먼트 데이터를 불러오지 못했습니다.",
-          tone: "danger",
-        });
-      })
-      .finally(() => {
-        if (isActive) {
-          setIsHydrating(false);
-        }
-      });
+    void hydrateLeagueTournamentPage({ showLoadingMessage: true });
+    const cleanupRealtime = subscribeToLeagueTournamentRealtime(scheduleRealtimeRefresh);
 
     return () => {
-      isActive = false;
+      if (refreshDebounceIdRef.current) {
+        window.clearTimeout(refreshDebounceIdRef.current);
+        refreshDebounceIdRef.current = null;
+      }
+
+      cleanupRealtime();
     };
   }, []);
 
@@ -124,9 +224,9 @@ export default function LeagueTournamentPage() {
 
   const groupSection = (
     <PreliminaryGroups
-      defaultOpen={flowStep === "preliminary"}
+      defaultOpen={displayFlowStep === "preliminary"}
       groups={groups}
-      resetKey={`${record?.tournament.name || "empty"}-${flowStep}`}
+      resetKey={`${record?.tournament.name || "empty"}-${displayFlowStep}`}
       statusLabel={groups.length > 0 ? "완료" : ""}
       statusTone="success"
     />
@@ -134,12 +234,12 @@ export default function LeagueTournamentPage() {
 
   const preliminarySection = (
     <PreliminaryMatchList
-      defaultOpen={hasGeneratedTournament && flowStep === "preliminary"}
+      defaultOpen={hasGeneratedTournament && displayFlowStep === "preliminary"}
       groups={groups}
       matches={preliminaryMatches}
       message={{ text: "", tone: "warning" }}
       readOnly
-      resetKey={`${record?.tournament.name || "empty"}-${flowStep}`}
+      resetKey={`${record?.tournament.name || "empty"}-${displayFlowStep}`}
       statusLabel={standingsReady ? "완료" : "진행 중"}
       statusTone={standingsReady ? "success" : "active"}
     />
@@ -149,9 +249,9 @@ export default function LeagueTournamentPage() {
     groups.length > 0 && groupA ? (
       <GroupStandingsTable
         key="standings-a"
-        defaultOpen={flowStep === "preliminary" || flowStep === "tournament"}
+        defaultOpen={displayFlowStep === "preliminary" || displayFlowStep === "tournament"}
         group={groupA}
-        resetKey={`${record?.tournament.name || "empty"}-${flowStep}`}
+        resetKey={`${record?.tournament.name || "empty"}-${displayFlowStep}`}
         standings={groupAStandings}
         statusLabel={
           groupAStandings.some((row) => row.needsTiebreakReview)
@@ -172,9 +272,9 @@ export default function LeagueTournamentPage() {
     groups.length > 0 && groupB ? (
       <GroupStandingsTable
         key="standings-b"
-        defaultOpen={flowStep === "preliminary" || flowStep === "tournament"}
+        defaultOpen={displayFlowStep === "preliminary" || displayFlowStep === "tournament"}
         group={groupB}
-        resetKey={`${record?.tournament.name || "empty"}-${flowStep}`}
+        resetKey={`${record?.tournament.name || "empty"}-${displayFlowStep}`}
         standings={groupBStandings}
         statusLabel={
           groupBStandings.some((row) => row.needsTiebreakReview)
@@ -204,11 +304,11 @@ export default function LeagueTournamentPage() {
 
   const bracketSection = (
     <SixTeamTournamentBracket
-      defaultOpen={flowStep === "tournament"}
+      defaultOpen={displayFlowStep === "tournament"}
       matches={tournamentMatches}
       message={{ text: "", tone: "warning" }}
       readOnly
-      resetKey={`${record?.tournament.name || "empty"}-${flowStep}`}
+      resetKey={`${record?.tournament.name || "empty"}-${displayFlowStep}`}
       standingsReady={standingsReady}
       statusLabel={!standingsReady ? "대기" : finalRankingsComplete ? "완료" : "진행 중"}
       statusTone={!standingsReady ? "neutral" : finalRankingsComplete ? "success" : "active"}
@@ -219,7 +319,7 @@ export default function LeagueTournamentPage() {
     <FinalRankingsPanel rankings={tournamentMatches.length > 0 ? finalRankings : []} />
   );
 
-  const orderedSections = orderTournamentSections(flowStep, {
+  const orderedSections = orderTournamentSections(displayFlowStep, {
     bracketSection,
     emptySection,
     finalRankingsSection,
@@ -262,7 +362,7 @@ export default function LeagueTournamentPage() {
         <WorkflowProgress
           champion={champion}
           finalRankingsComplete={finalRankingsComplete}
-          flowStep={flowStep}
+          flowStep={displayFlowStep}
           hasGeneratedTournament={hasGeneratedTournament}
           hasTiebreakReview={hasTiebreakReview}
           preliminaryCompletedCount={preliminaryCompletedCount}
@@ -272,10 +372,53 @@ export default function LeagueTournamentPage() {
           tournamentTotalCount={tournamentMatches.length}
         />
 
+        {isHoldingFlowStepTransition ? (
+          <section className="panel status-panel" aria-live="polite">
+            <p className="status-banner" data-tone="success">
+              결과가 업데이트되었습니다. 현재 화면에서 잠시 확인한 뒤 {formatFlowStepLabel(flowStep)} 화면으로 이동합니다.
+            </p>
+          </section>
+        ) : null}
+
+        <div className="section-scroll-anchor" ref={transitionedSectionAnchorRef} />
         {orderedSections}
       </main>
     </div>
   );
+}
+
+function getRecordFlowStep(record) {
+  if (!record) {
+    return "setup";
+  }
+
+  const groups = record.groups || [];
+  const preliminaryMatches = record.preliminaryMatches || [];
+  const tournamentMatches = record.tournamentMatches || [];
+  const groupA = groups.find((group) => group.id === "A") || null;
+  const groupB = groups.find((group) => group.id === "B") || null;
+  const groupAStandings = groupA ? calculateGroupStandings(groupA, preliminaryMatches) : [];
+  const groupBStandings = groupB ? calculateGroupStandings(groupB, preliminaryMatches) : [];
+  const standingsReady = areStandingsFinal(groupAStandings) && areStandingsFinal(groupBStandings);
+
+  if (areFinalRankingsComplete(tournamentMatches)) {
+    return "complete";
+  }
+
+  if (standingsReady) {
+    return "tournament";
+  }
+
+  return groups.length > 0 ? "preliminary" : "setup";
+}
+
+function formatFlowStepLabel(flowStep) {
+  return {
+    setup: "대회 정보",
+    preliminary: "예선",
+    tournament: "본선",
+    complete: "최종 순위",
+  }[flowStep] || "다음 단계";
 }
 
 function orderTournamentSections(flowStep, sections) {

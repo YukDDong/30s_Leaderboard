@@ -319,6 +319,7 @@ export function SixTeamTournamentBracket({
       summary={formatTournamentSummary(matches, standingsReady)}
       title="본선 대진표"
     >
+      <TournamentBracketDiagram matches={matches} />
       <div className="league-bracket-grid">
         {roundGroups.map((round) => (
           <div className="league-round-column" key={round.id}>
@@ -336,6 +337,80 @@ export function SixTeamTournamentBracket({
       </div>
       <Message message={message} />
     </CollapsiblePanel>
+  );
+}
+
+function TournamentBracketDiagram({ matches }) {
+  const matchMap = new Map(matches.map((match) => [match.id, match]));
+
+  return (
+    <div className="tournament-diagram-scroll" aria-label="본선 토너먼트 현황 그림">
+      <div className="tournament-diagram">
+        <svg
+          className="tournament-diagram-lines"
+          viewBox="0 0 980 470"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M 238 128 H 286 V 128 H 334" />
+          <path d="M 238 342 H 286 V 342 H 334" />
+          <path d="M 572 128 H 626 V 235 H 660" />
+          <path d="M 572 342 H 626 V 235 H 660" />
+        </svg>
+
+        <div className="tournament-diagram-round diagram-round-quarterfinal">
+          <span className="tournament-diagram-round-title">6강</span>
+        </div>
+        <div className="tournament-diagram-round diagram-round-semifinal">
+          <span className="tournament-diagram-round-title">4강</span>
+        </div>
+        <div className="tournament-diagram-round diagram-round-final">
+          <span className="tournament-diagram-round-title">결승</span>
+        </div>
+
+        <BracketMatchNode className="diagram-node-qf diagram-node-qf-1" match={matchMap.get("qf-1")} title="6강 1경기" />
+        <BracketMatchNode className="diagram-node-qf diagram-node-qf-2" match={matchMap.get("qf-2")} title="6강 2경기" />
+        <BracketMatchNode className="diagram-node-sf diagram-node-sf-1" match={matchMap.get("sf-1")} title="4강 1경기" />
+        <BracketMatchNode className="diagram-node-sf diagram-node-sf-2" match={matchMap.get("sf-2")} title="4강 2경기" />
+        <BracketMatchNode className="diagram-node-final" match={matchMap.get("final")} title="결승" />
+        <BracketMatchNode className="diagram-node-third" match={matchMap.get("third-place")} title="3·4위전" />
+      </div>
+    </div>
+  );
+}
+
+function BracketMatchNode({ className, match, title }) {
+  if (!match) {
+    return null;
+  }
+
+  const winnerId = match.winnerTeamId || "";
+
+  return (
+    <article className={`tournament-diagram-node ${className}`} data-complete={match.status === "completed" ? "true" : undefined}>
+      <span className="tournament-diagram-title">{title}</span>
+      <BracketTeamLine
+        score={match.team1Score}
+        slot={match.team1Slot}
+        team={match.team1}
+        winner={Boolean(match.team1?.id && match.team1.id === winnerId)}
+      />
+      <BracketTeamLine
+        score={match.team2Score}
+        slot={match.team2Slot}
+        team={match.team2}
+        winner={Boolean(match.team2?.id && match.team2.id === winnerId)}
+      />
+    </article>
+  );
+}
+
+function BracketTeamLine({ score, slot, team, winner }) {
+  return (
+    <div className="tournament-diagram-team" data-winner={winner ? "true" : undefined}>
+      <span className="tournament-diagram-team-name">{team ? team.name : slotLabel(slot)}</span>
+      <span className="tournament-diagram-score">{formatScoreValue(score) || "-"}</span>
+    </div>
   );
 }
 

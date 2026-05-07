@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { getRouteHref, ROUTES } from "../../app/router.js";
 import { AdminAccessGate, loadAdminSession } from "../../shared/adminSession.jsx";
 import { Message } from "../../shared/components.jsx";
@@ -45,6 +45,13 @@ function createInitialTeams() {
 }
 
 const initialTeams = createInitialTeams();
+const FLOW_STEP_TRANSITION_DELAY_MS = 2800;
+const FLOW_STEP_ORDER = {
+  setup: 0,
+  preliminary: 1,
+  tournament: 2,
+  complete: 3,
+};
 
 export default function LeagueTournamentAdminPage() {
   return (
@@ -70,6 +77,10 @@ function LeagueTournamentAdminContent({ onLogout }) {
   const [dbMessage, setDbMessage] = useState({ text: "", tone: "warning" });
   const [isHydrating, setIsHydrating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const shouldDelayNextFlowStepRef = useRef(false);
+  const flowStepTransitionTimeoutRef = useRef(null);
+  const pendingTransitionScrollRef = useRef(false);
+  const transitionedSectionAnchorRef = useRef(null);
 
   const groupA = groups.find((group) => group.id === "A") || null;
   const groupB = groups.find((group) => group.id === "B") || null;
@@ -102,7 +113,53 @@ function LeagueTournamentAdminContent({ onLogout }) {
       : hasGeneratedTournament
         ? "preliminary"
         : "setup";
+  const [displayFlowStep, setDisplayFlowStep] = useState(flowStep);
   const configMissing = !isSupabaseConfigured();
+  const isHoldingFlowStepTransition = displayFlowStep !== flowStep;
+
+  useEffect(() => {
+    if (flowStepTransitionTimeoutRef.current) {
+      window.clearTimeout(flowStepTransitionTimeoutRef.current);
+      flowStepTransitionTimeoutRef.current = null;
+    }
+
+    const displayOrder = FLOW_STEP_ORDER[displayFlowStep] ?? 0;
+    const nextOrder = FLOW_STEP_ORDER[flowStep] ?? 0;
+    const shouldDelayTransition = shouldDelayNextFlowStepRef.current && nextOrder > displayOrder;
+    shouldDelayNextFlowStepRef.current = false;
+
+    if (!shouldDelayTransition) {
+      setDisplayFlowStep(flowStep);
+      return undefined;
+    }
+
+    flowStepTransitionTimeoutRef.current = window.setTimeout(() => {
+      pendingTransitionScrollRef.current = true;
+      setDisplayFlowStep(flowStep);
+      flowStepTransitionTimeoutRef.current = null;
+    }, FLOW_STEP_TRANSITION_DELAY_MS);
+
+    return () => {
+      if (flowStepTransitionTimeoutRef.current) {
+        window.clearTimeout(flowStepTransitionTimeoutRef.current);
+        flowStepTransitionTimeoutRef.current = null;
+      }
+    };
+  }, [displayFlowStep, flowStep]);
+
+  useEffect(() => {
+    if (!pendingTransitionScrollRef.current || displayFlowStep !== flowStep) {
+      return;
+    }
+
+    pendingTransitionScrollRef.current = false;
+    window.requestAnimationFrame(() => {
+      transitionedSectionAnchorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [displayFlowStep, flowStep]);
 
   function applyTournamentRecord(record) {
     if (!record) {
@@ -284,6 +341,10 @@ function LeagueTournamentAdminContent({ onLogout }) {
       : tournamentMatches;
     const changedMatch = nextMatches.find((match) => match.id === matchId);
 
+    if (didCompleteAllStandings && flowStep === "preliminary") {
+      shouldDelayNextFlowStepRef.current = true;
+    }
+
     setPreliminaryMatches(nextMatches);
 
     if (groupA && groupB) {
@@ -341,6 +402,11 @@ function LeagueTournamentAdminContent({ onLogout }) {
     try {
       const nextMatches = updateTournamentWinner(tournamentMatches, matchId, team1Score, team2Score);
       const nextFinalRankingsComplete = areFinalRankingsComplete(nextMatches);
+
+      if (nextFinalRankingsComplete && flowStep === "tournament") {
+        shouldDelayNextFlowStepRef.current = true;
+      }
+
       setTournamentMatches(nextMatches);
       setTournamentMessage({ text: "토너먼트 결과를 반영했습니다.", tone: "success" });
 
@@ -405,14 +471,14 @@ function LeagueTournamentAdminContent({ onLogout }) {
 
   const setupSection = (
     <LeagueTournamentForm
-      defaultOpen={!hasGeneratedTournament || validation.errors.length > 0 || flowStep === "setup"}
+      defaultOpen={!hasGeneratedTournament || validation.errors.length > 0 || displayFlowStep === "setup"}
       disabled={isHydrating || isSaving || configMissing}
       errors={validation.errors}
       isSubmitting={isSaving}
       onGenerate={handleGenerate}
       onTeamChange={handleTeamChange}
       onTournamentNameChange={setTournamentName}
-      resetKey={`${generatedTournamentName || "new"}-${flowStep}`}
+      resetKey={`${generatedTournamentName || "new"}-${displayFlowStep}`}
       statusLabel={
         validation.errors.length > 0 ? "확인 필요" : hasGeneratedTournament ? "완료" : "진행 중"
       }
@@ -427,9 +493,9 @@ function LeagueTournamentAdminContent({ onLogout }) {
 
   const groupSection = (
     <PreliminaryGroups
-      defaultOpen={flowStep === "setup" ? false : flowStep === "preliminary"}
+      defaultOpen={displayFlowStep === "setup" ? false : displayFlowStep === "preliminary"}
       groups={groups}
-      resetKey={`${generatedTournamentName}-${flowStep}`}
+      resetKey={`${generatedTournamentName}-${displayFlowStep}`}
       statusLabel="완료"
       statusTone="success"
     />
@@ -437,12 +503,12 @@ function LeagueTournamentAdminContent({ onLogout }) {
 
   const preliminarySection = (
     <PreliminaryMatchList
-      defaultOpen={hasGeneratedTournament && (flowStep === "preliminary" || !standingsReady)}
+      defaultOpen={hasGeneratedTournament && (displayFlowStep === "preliminary" || !standingsReady)}
       groups={groups}
       matches={preliminaryMatches}
       message={preliminaryMessage}
       disabled={isHydrating || isSaving || configMissing}
-      resetKey={`${generatedTournamentName}-${flowStep}`}
+      resetKey={`${generatedTournamentName}-${displayFlowStep}`}
       statusLabel={standingsReady ? "완료" : "진행 중"}
       statusTone={standingsReady ? "success" : "active"}
       onSaveScore={handlePreliminaryScoreSave}
@@ -453,9 +519,9 @@ function LeagueTournamentAdminContent({ onLogout }) {
     groups.length > 0 && groupA ? (
       <GroupStandingsTable
         key="standings-a"
-        defaultOpen={flowStep === "preliminary" || flowStep === "tournament"}
+        defaultOpen={displayFlowStep === "preliminary" || displayFlowStep === "tournament"}
         group={groupA}
-        resetKey={`${generatedTournamentName}-${flowStep}`}
+        resetKey={`${generatedTournamentName}-${displayFlowStep}`}
         standings={groupAStandings}
         statusLabel={
           groupAStandings.some((row) => row.needsTiebreakReview)
@@ -476,9 +542,9 @@ function LeagueTournamentAdminContent({ onLogout }) {
     groups.length > 0 && groupB ? (
       <GroupStandingsTable
         key="standings-b"
-        defaultOpen={flowStep === "preliminary" || flowStep === "tournament"}
+        defaultOpen={displayFlowStep === "preliminary" || displayFlowStep === "tournament"}
         group={groupB}
-        resetKey={`${generatedTournamentName}-${flowStep}`}
+        resetKey={`${generatedTournamentName}-${displayFlowStep}`}
         standings={groupBStandings}
         statusLabel={
           groupBStandings.some((row) => row.needsTiebreakReview)
@@ -508,10 +574,10 @@ function LeagueTournamentAdminContent({ onLogout }) {
 
   const bracketSection = (
     <SixTeamTournamentBracket
-      defaultOpen={flowStep === "tournament"}
+      defaultOpen={displayFlowStep === "tournament"}
       matches={tournamentMatches}
       message={tournamentMessage}
-      resetKey={`${generatedTournamentName}-${flowStep}`}
+      resetKey={`${generatedTournamentName}-${displayFlowStep}`}
       standingsReady={standingsReady}
       statusLabel={!standingsReady ? "대기" : finalRankingsComplete ? "완료" : "진행 중"}
       statusTone={!standingsReady ? "neutral" : finalRankingsComplete ? "success" : "active"}
@@ -523,7 +589,7 @@ function LeagueTournamentAdminContent({ onLogout }) {
     <FinalRankingsPanel rankings={tournamentMatches.length > 0 ? finalRankings : []} />
   );
 
-  const orderedSections = orderTournamentSections(flowStep, {
+  const orderedSections = orderTournamentSections(displayFlowStep, {
     bracketSection,
     finalRankingsSection,
     groupSection,
@@ -577,7 +643,7 @@ function LeagueTournamentAdminContent({ onLogout }) {
         <WorkflowProgress
           champion={champion}
           finalRankingsComplete={finalRankingsComplete}
-          flowStep={flowStep}
+          flowStep={displayFlowStep}
           hasGeneratedTournament={hasGeneratedTournament}
           hasTiebreakReview={hasTiebreakReview}
           preliminaryCompletedCount={preliminaryCompletedCount}
@@ -587,10 +653,28 @@ function LeagueTournamentAdminContent({ onLogout }) {
           tournamentTotalCount={tournamentMatches.length}
         />
 
+        {isHoldingFlowStepTransition ? (
+          <section className="panel status-panel" aria-live="polite">
+            <p className="status-banner" data-tone="success">
+              결과가 반영되었습니다. 현재 화면에서 잠시 확인한 뒤 {formatFlowStepLabel(flowStep)} 화면으로 이동합니다.
+            </p>
+          </section>
+        ) : null}
+
+        <div className="section-scroll-anchor" ref={transitionedSectionAnchorRef} />
         {orderedSections}
       </main>
     </>
   );
+}
+
+function formatFlowStepLabel(flowStep) {
+  return {
+    setup: "대회 정보",
+    preliminary: "예선",
+    tournament: "본선",
+    complete: "최종 순위",
+  }[flowStep] || "다음 단계";
 }
 
 function orderTournamentSections(flowStep, sections) {
