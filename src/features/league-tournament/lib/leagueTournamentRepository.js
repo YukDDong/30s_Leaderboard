@@ -1,4 +1,7 @@
-import { getSupabaseClient } from "../../../shared/supabaseClient.js";
+import {
+  callAdminFunction,
+  getSupabaseClient,
+} from "../../../shared/supabaseClient.js";
 import {
   createTwoGroups,
   generateSixTeamTournamentBracket,
@@ -182,23 +185,19 @@ export async function savePreliminaryMatchRecord(match) {
 export async function saveTournamentMatchRecords(tournamentId, matches) {
   const supabase = getSupabaseClient();
   const updatedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from(TOURNAMENT_MATCH_TABLE)
+    .upsert(
+      matches.map((match, index) => ({
+        ...tournamentMatchToRow(tournamentId, match, index),
+        updated_at: updatedAt,
+      })),
+      { onConflict: "tournament_id,match_key" }
+    );
 
-  await Promise.all(
-    matches.map(async (match, index) => {
-      const { error } = await supabase
-        .from(TOURNAMENT_MATCH_TABLE)
-        .update({
-          ...tournamentMatchToRow(tournamentId, match, index),
-          updated_at: updatedAt,
-        })
-        .eq("tournament_id", tournamentId)
-        .eq("match_key", match.id);
-
-      if (error) {
-        throw createRepositoryError(error.message, error.code);
-      }
-    })
-  );
+  if (error) {
+    throw createRepositoryError(error.message, error.code);
+  }
 }
 
 export async function updateLeagueTournamentRecordStatus(tournamentId, status) {
@@ -214,6 +213,10 @@ export async function updateLeagueTournamentRecordStatus(tournamentId, status) {
   if (error) {
     throw createRepositoryError(error.message, error.code);
   }
+}
+
+export async function resetLeagueTournamentRecords(adminToken) {
+  return callAdminFunction("reset_league_tournaments", {}, adminToken);
 }
 
 function normalizeTeamRows(rows) {
@@ -254,7 +257,7 @@ function normalizePreliminaryMatchRows(rows, teamMap) {
 }
 
 function normalizeTournamentMatchRows(rows, teamMap) {
-  return rows.map((row) => ({
+  const matches = rows.map((row) => ({
     id: row.match_key,
     dbId: row.id,
     round: row.round,
@@ -269,6 +272,8 @@ function normalizeTournamentMatchRows(rows, teamMap) {
     status: row.status === "completed" ? "completed" : "pending",
     nextMatchId: row.next_match_key || null,
   }));
+
+  return ensureThirdPlaceMatch(matches);
 }
 
 function tournamentMatchToRow(tournamentId, match, index) {
@@ -302,4 +307,39 @@ function createRepositoryError(message, code = "") {
   const error = new Error(message);
   error.code = code;
   return error;
+}
+
+function ensureThirdPlaceMatch(matches) {
+  if (matches.some((match) => match.id === "third-place")) {
+    return matches;
+  }
+
+  const semifinalOne = matches.find((match) => match.id === "sf-1");
+  const semifinalTwo = matches.find((match) => match.id === "sf-2");
+
+  return [
+    ...matches,
+    {
+      id: "third-place",
+      round: "final",
+      name: "3·4위전",
+      team1Slot: "L_SF1",
+      team2Slot: "L_SF2",
+      team1: getCompletedLoser(semifinalOne),
+      team2: getCompletedLoser(semifinalTwo),
+      team1Score: null,
+      team2Score: null,
+      winnerTeamId: null,
+      status: "pending",
+      nextMatchId: null,
+    },
+  ];
+}
+
+function getCompletedLoser(match) {
+  if (!match || match.status !== "completed" || !match.winnerTeamId) {
+    return null;
+  }
+
+  return [match.team1, match.team2].find((team) => team && team.id !== match.winnerTeamId) || null;
 }

@@ -85,6 +85,8 @@ Deno.serve(async (request) => {
         return await handleClearMatch(supabase, body);
       case "reset_data":
         return await handleResetData(supabase);
+      case "reset_league_tournaments":
+        return await handleResetLeagueTournaments(supabase);
       default:
         return jsonResponse({ error: "지원하지 않는 action입니다." }, 400);
     }
@@ -431,6 +433,21 @@ async function handleResetData(supabase: ReturnType<typeof createClient>) {
 
   return jsonResponse({
     message: "모든 데이터를 초기화했습니다. 빈 상태에서 다시 시작할 수 있습니다.",
+  });
+}
+
+async function handleResetLeagueTournaments(supabase: ReturnType<typeof createClient>) {
+  const { error } = await supabase
+    .from("league_tournaments")
+    .delete()
+    .gte("created_at", "1970-01-01T00:00:00Z");
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return jsonResponse({
+    message: "저장된 리그토너먼트 운영표를 초기화했습니다. 새 운영표를 작성할 수 있습니다.",
   });
 }
 

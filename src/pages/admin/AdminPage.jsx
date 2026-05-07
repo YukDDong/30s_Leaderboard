@@ -1,5 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
-import { getRouteHref } from "../../app/router.js";
+import { getRouteHref, ROUTES } from "../../app/router.js";
+import {
+  AdminAccessGate,
+  isAdminSessionValid,
+  loadAdminSession,
+} from "../../shared/adminSession.jsx";
 import {
   ConfigNotice,
   MatchesMatrix,
@@ -24,13 +29,8 @@ import {
   subscribeToLeagueRealtime,
   uploadLeagueAssetImage,
   validateLeagueImageFile,
-  verifyAdminPassword,
 } from "../../shared/supabaseClient.js";
 
-const SESSION_KEYS = {
-  token: "admin_session_token",
-  expiresAt: "admin_session_expires_at",
-};
 const REALTIME_REFRESH_DEBOUNCE_MS = 500;
 const emptyLeagueState = { teams: [], matches: [], leagueAsset: null };
 const emptyMessages = {
@@ -46,9 +46,18 @@ const emptyMessages = {
 };
 
 export default function AdminPage() {
+  return (
+    <div className="page-shell">
+      <AdminAccessGate heading="리그 순위표 관리자 인증">
+        {({ handleLogout }) => <LeagueAdminContent onLogout={handleLogout} />}
+      </AdminAccessGate>
+    </div>
+  );
+}
+
+function LeagueAdminContent({ onLogout }) {
   const [league, setLeague] = useState(emptyLeagueState);
   const [messages, setMessages] = useState(emptyMessages);
-  const [isUnlocked, setIsUnlocked] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedMatchId, setSelectedMatchId] = useState("");
   const [selectedLeagueImage, setSelectedLeagueImage] = useState(null);
@@ -59,12 +68,11 @@ export default function AdminPage() {
   const refreshDebounceIdRef = useRef(null);
   const loadingRef = useRef(false);
   const isModalOpenRef = useRef(false);
-  const isUnlockedRef = useRef(false);
   const modalScoreARef = useRef(null);
 
   const selectedMatch = selectedMatchId ? findMatchById(league.matches, selectedMatchId) : null;
   const isModalOpen = Boolean(selectedMatchId);
-  const isLocked = !isUnlocked || !isAdminSessionValid();
+  const isLocked = !isAdminSessionValid();
   const configMissing = !isSupabaseConfigured();
   const matchesExist = league.matches.length > 0;
 
@@ -89,48 +97,11 @@ export default function AdminPage() {
     });
   }
 
-  function loadAdminSession() {
-    return {
-      token: localStorage.getItem(SESSION_KEYS.token) || "",
-      expiresAt: localStorage.getItem(SESSION_KEYS.expiresAt) || "",
-    };
-  }
-
-  function saveAdminSession(token, expiresAt) {
-    localStorage.setItem(SESSION_KEYS.token, token);
-    localStorage.setItem(SESSION_KEYS.expiresAt, expiresAt);
-  }
-
-  function clearAdminSession() {
-    localStorage.removeItem(SESSION_KEYS.token);
-    localStorage.removeItem(SESSION_KEYS.expiresAt);
-  }
-
-  function isAdminSessionValid() {
-    const session = {
-      token: localStorage.getItem(SESSION_KEYS.token) || "",
-      expiresAt: localStorage.getItem(SESSION_KEYS.expiresAt) || "",
-    };
-
-    if (!session.token || !session.expiresAt) {
-      return false;
-    }
-
-    const expiresAtTime = Date.parse(session.expiresAt);
-
-    if (Number.isNaN(expiresAtTime) || expiresAtTime <= Date.now()) {
-      clearAdminSession();
-      return false;
-    }
-
-    return true;
-  }
-
   function expireAdminSession(message) {
-    clearAdminSession();
-    setIsUnlocked(false);
     setSelectedMatchId("");
-    setMessage("auth", message, "warning");
+    setSelectedLeagueImage(null);
+    setMessage("adminStatus", message, "warning");
+    onLogout?.();
   }
 
   async function hydrateAdminPage(statusMessage = "", { showBusy = true } = {}) {
@@ -185,24 +156,6 @@ export default function AdminPage() {
     }
   }
 
-  async function restoreAdminSession() {
-    setIsUnlocked(false);
-    setLoading(true);
-    setMessage("auth", "이전 관리자 세션을 확인하는 중입니다.", "warning");
-
-    try {
-      const session = loadAdminSession();
-      await callAdminFunction("session_status", {}, session.token);
-      setIsUnlocked(true);
-      clearMessage("auth");
-      await hydrateAdminPage("이전 관리자 세션을 복원했습니다.");
-    } catch (error) {
-      expireAdminSession("관리자 세션이 만료되었거나 유효하지 않습니다. 다시 비밀번호를 입력해 주세요.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function runAdminAction(action, payload = {}) {
     if (!isAdminSessionValid()) {
       expireAdminSession("관리자 세션이 만료되었습니다. 다시 비밀번호를 입력해 주세요.");
@@ -238,7 +191,7 @@ export default function AdminPage() {
   }
 
   function scheduleRealtimeRefresh() {
-    if (!isUnlockedRef.current || !isAdminSessionValid()) {
+    if (!isAdminSessionValid()) {
       return;
     }
 
@@ -257,45 +210,11 @@ export default function AdminPage() {
     }, REALTIME_REFRESH_DEBOUNCE_MS);
   }
 
-  async function handlePasswordSubmit(event) {
-    event.preventDefault();
-
-    const formData = new FormData(event.currentTarget);
-    const password = String(formData.get("password") || "").trim();
-
-    if (!password) {
-      setMessage("auth", "비밀번호를 입력해 주세요.", "danger");
-      return;
-    }
-
-    setLoading(true);
-    setMessage("auth", "관리자 비밀번호를 검증하는 중입니다.", "warning");
-
-    try {
-      const result = await verifyAdminPassword(password);
-      saveAdminSession(result.token, result.expiresAt);
-      event.currentTarget.reset();
-      setIsUnlocked(true);
-      setMessage("auth", "인증에 성공했습니다.", "success");
-      await hydrateAdminPage("관리자 세션이 열렸습니다.");
-    } catch (error) {
-      setMessage(
-        "auth",
-        error.message || "비밀번호 검증에 실패했습니다. Edge Function 설정을 확인해 주세요.",
-        "danger"
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function handleLogout() {
-    clearAdminSession();
     setSelectedMatchId("");
     setSelectedLeagueImage(null);
     clearMessage("adminStatus");
-    setMessage("auth", "로그아웃되었습니다. 다시 비밀번호를 입력해 주세요.", "warning");
-    setIsUnlocked(false);
+    onLogout?.();
   }
 
   function handleLeagueImageChange(event) {
@@ -595,10 +514,6 @@ export default function AdminPage() {
   }, [loading]);
 
   useEffect(() => {
-    isUnlockedRef.current = isUnlocked;
-  }, [isUnlocked]);
-
-  useEffect(() => {
     isModalOpenRef.current = isModalOpen;
     document.body.classList.toggle("modal-open", isModalOpen);
 
@@ -632,23 +547,22 @@ export default function AdminPage() {
       const missingKeys = getMissingConfigKeys().join(", ");
       setMessage(
         "config",
-        `Supabase 설정이 비어 있습니다. config.js의 ${missingKeys} 값을 채운 뒤 관리자 인증을 진행해 주세요.`,
+        `Supabase 설정이 비어 있습니다. config.js의 ${missingKeys} 값을 채운 뒤 관리자 페이지를 사용할 수 있습니다.`,
         "warning"
       );
-      setIsUnlocked(false);
       return;
     }
 
     if (isAdminSessionValid()) {
-      void restoreAdminSession();
+      void hydrateAdminPage("관리자 세션이 열렸습니다.");
       return;
     }
 
-    setIsUnlocked(false);
+    expireAdminSession("관리자 세션이 만료되었습니다. 다시 비밀번호를 입력해 주세요.");
   }, []);
 
   useEffect(() => {
-    if (!isUnlocked || !isSupabaseConfigured()) {
+    if (!isSupabaseConfigured()) {
       return undefined;
     }
 
@@ -662,7 +576,7 @@ export default function AdminPage() {
 
       cleanupRealtime();
     };
-  }, [isUnlocked]);
+  }, []);
 
   const imagePreviewUrl = leagueImagePreviewUrl || league.leagueAsset?.imageUrl || "";
   const imageMeta = selectedLeagueImage
@@ -672,68 +586,46 @@ export default function AdminPage() {
       : "";
 
   return (
-    <div className="page-shell">
-      {isUnlocked ? (
-        <header className="hero-card">
-          <div className="hero-copy">
-            <p className="eyebrow">Tennis League Admin</p>
-            <h1>관리자 페이지</h1>
-          </div>
+    <>
+      <header className="hero-card">
+        <div className="hero-copy">
+          <p className="eyebrow">Tennis League Admin</p>
+          <h1>리그 순위표 관리</h1>
+        </div>
 
-          <aside className="hero-aside">
-            <div>
-              <span className="hero-badge">Admin Mode</span>
-              <p>관리자 세션은 24시간 유지되며, 만료되면 다시 비밀번호 인증이 필요합니다.</p>
-            </div>
-            <div className="hero-actions hero-actions-stack">
-              <a className="secondary-button button-link" href={getRouteHref("/league-tournament")} data-router-link>
-                리그 & 토너먼트
-              </a>
-              <a className="secondary-button button-link" href={getRouteHref("/")} data-router-link>
-                보기 전용 페이지
-              </a>
-              <button
-                className="ghost-danger-button"
-                disabled={loading || isLocked}
-                type="button"
-                onClick={handleLogout}
-              >
-                로그아웃
-              </button>
-            </div>
-          </aside>
-        </header>
-      ) : null}
+        <aside className="hero-aside">
+          <div>
+            <span className="hero-badge">Admin Mode</span>
+            <p>관리자 세션은 24시간 유지되며, 만료되면 다시 비밀번호 인증이 필요합니다.</p>
+          </div>
+          <div className="hero-actions hero-actions-stack">
+            <a className="secondary-button button-link" href={getRouteHref(ROUTES.admin)} data-router-link>
+              관리자 홈
+            </a>
+            <a className="secondary-button button-link" href={getRouteHref(ROUTES.adminLeagueTournament)} data-router-link>
+              리그토너먼트 관리
+            </a>
+            <a className="secondary-button button-link" href={getRouteHref(ROUTES.leagueTournament)} data-router-link>
+              리그토너먼트 보기
+            </a>
+            <a className="secondary-button button-link" href={getRouteHref(ROUTES.league)} data-router-link>
+              보기 페이지
+            </a>
+            <button
+              className="ghost-danger-button"
+              disabled={loading || isLocked}
+              type="button"
+              onClick={handleLogout}
+            >
+              로그아웃
+            </button>
+          </div>
+        </aside>
+      </header>
 
       <ConfigNotice message={messages.config} />
 
-      {!isUnlocked ? (
-        <section className="panel auth-panel" aria-labelledby="auth-heading">
-          <div className="section-header">
-            <div>
-              <p className="section-kicker">Access</p>
-              <h2 id="auth-heading">관리자 인증</h2>
-            </div>
-          </div>
-          <form className="auth-form" noValidate onSubmit={handlePasswordSubmit}>
-            <label className="input-group">
-              <span>관리자 비밀번호</span>
-              <input
-                autoComplete="current-password"
-                disabled={loading || configMissing}
-                name="password"
-                placeholder="비밀번호 입력"
-                type="password"
-              />
-            </label>
-            <button className="primary-button" disabled={loading || configMissing} type="submit">
-              인증
-            </button>
-          </form>
-          <Message message={messages.auth} />
-        </section>
-      ) : (
-        <main className="main-grid">
+      <main className="main-grid">
           <section className="panel status-panel" aria-live="polite">
             <Message className="status-banner" message={messages.adminStatus} />
           </section>
@@ -918,8 +810,7 @@ export default function AdminPage() {
             </div>
             <Message message={messages.reset} />
           </section>
-        </main>
-      )}
+      </main>
 
       <MatchModal
         loading={loading}
@@ -933,7 +824,7 @@ export default function AdminPage() {
         setScores={setModalScores}
         message={messages.modal}
       />
-    </div>
+    </>
   );
 }
 

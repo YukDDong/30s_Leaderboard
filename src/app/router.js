@@ -2,12 +2,16 @@ const DEPLOY_BASE_PATH = "/30s_Leaderboard";
 const LEGACY_PATHS = {
   "/admin.html": "/admin",
   "/index.html": "/",
+  "/league-tournament/admin": "/admin/league-tournament",
   "/league-tournament.html": "/league-tournament",
 };
 
 export const ROUTES = {
   home: "/",
+  league: "/league",
   admin: "/admin",
+  adminLeague: "/admin/league",
+  adminLeagueTournament: "/admin/league-tournament",
   leagueTournament: "/league-tournament",
 };
 

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   areStandingsFinal,
+  areFinalRankingsComplete,
+  calculateFinalRankings,
   calculateGroupStandings,
   createTwoGroups,
   findChampion,
@@ -111,6 +113,7 @@ describe("league tournament utilities", () => {
     ]);
 
     let bracket = generateSixTeamTournamentBracket(groupAStandings, groupBStandings);
+    assert.equal(bracket.length, 6);
     assert.equal(bracket.find((match) => match.id === "qf-1").team1.id, "team-2");
     assert.equal(bracket.find((match) => match.id === "qf-1").team2.id, "team-6");
     assert.equal(bracket.find((match) => match.id === "qf-2").team1.id, "team-5");
@@ -126,12 +129,24 @@ describe("league tournament utilities", () => {
 
     bracket = updateTournamentWinner(bracket, "sf-1", 10, 8);
     assert.equal(bracket.find((match) => match.id === "final").team1.id, "team-4");
+    assert.equal(bracket.find((match) => match.id === "third-place").team1.id, "team-2");
 
     bracket = updateTournamentWinner(bracket, "sf-2", 8, 10);
     assert.equal(bracket.find((match) => match.id === "final").team2.id, "team-3");
+    assert.equal(bracket.find((match) => match.id === "third-place").team2.id, "team-1");
 
     bracket = updateTournamentWinner(bracket, "final", 10, 6);
     assert.equal(findChampion(bracket).id, "team-4");
+    assert.equal(areFinalRankingsComplete(bracket), false);
+
+    bracket = updateTournamentWinner(bracket, "third-place", 10, 4);
+    assert.equal(areFinalRankingsComplete(bracket), true);
+    assert.deepEqual(calculateFinalRankings(bracket).map((row) => `${row.rank}:${row.team.id}`), [
+      "1:team-4",
+      "2:team-3",
+      "3:team-2",
+      "4:team-1",
+    ]);
   });
 
   it("rejects tied tournament scores", () => {

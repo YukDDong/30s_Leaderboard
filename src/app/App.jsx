@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from "react";
+import AdminHubPage from "../pages/admin/AdminHubPage.jsx";
 import AdminPage from "../pages/admin/AdminPage.jsx";
+import HomePage from "../pages/home/HomePage.jsx";
+import LeagueTournamentAdminPage from "../pages/league-tournament/LeagueTournamentAdminPage.jsx";
 import LeagueTournamentPage from "../pages/league-tournament/LeagueTournamentPage.jsx";
 import ViewerPage from "../pages/viewer/ViewerPage.jsx";
 import {
@@ -12,7 +15,10 @@ import {
 
 const routeTitles = {
   [ROUTES.home]: "Tennis League Board",
+  [ROUTES.league]: "Tennis League Standings",
   [ROUTES.admin]: "Tennis League Board Admin",
+  [ROUTES.adminLeague]: "Tennis League Standings Admin",
+  [ROUTES.adminLeagueTournament]: "League & Tournament Admin",
   [ROUTES.leagueTournament]: "League & Tournament",
 };
 
@@ -75,7 +81,19 @@ export default function App() {
     document.title = routeTitles[routePath] || routeTitles[ROUTES.home];
   }, [routePath]);
 
+  if (routePath === ROUTES.home) {
+    return <HomePage />;
+  }
+
+  if (routePath === ROUTES.league) {
+    return <ViewerPage />;
+  }
+
   if (routePath === ROUTES.admin) {
+    return <AdminHubPage />;
+  }
+
+  if (routePath === ROUTES.adminLeague) {
     return <AdminPage />;
   }
 
@@ -83,7 +101,11 @@ export default function App() {
     return <LeagueTournamentPage />;
   }
 
-  return <ViewerPage />;
+  if (routePath === ROUTES.adminLeagueTournament) {
+    return <LeagueTournamentAdminPage />;
+  }
+
+  return <HomePage />;
 }
 
 function getRouteBasePrefix() {

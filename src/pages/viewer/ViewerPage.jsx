@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ConfigNotice, MatchesMatrix, Message, StandingsTable, SummaryCards } from "../../shared/components.jsx";
 import { normalizeLeagueData } from "../../shared/league.js";
-import { getRouteHref } from "../../app/router.js";
+import { getRouteHref, ROUTES } from "../../app/router.js";
 import {
   fetchLeagueData,
   getMissingConfigKeys,
@@ -107,10 +107,13 @@ export default function ViewerPage() {
         </div>
         <div className="viewer-hero-toolbar">
           <div className="hero-actions">
-            <a className="secondary-button button-link" href={getRouteHref("/league-tournament")} data-router-link>
+            <a className="secondary-button button-link" href={getRouteHref(ROUTES.home)} data-router-link>
+              홈
+            </a>
+            <a className="secondary-button button-link" href={getRouteHref(ROUTES.leagueTournament)} data-router-link>
               리그 & 토너먼트
             </a>
-            <a className="secondary-button button-link" href={getRouteHref("/admin")} data-router-link>
+            <a className="secondary-button button-link" href={getRouteHref(ROUTES.adminLeague)} data-router-link>
               관리자 페이지
             </a>
           </div>

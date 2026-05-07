@@ -28,7 +28,7 @@ GitHub Pages에 배포할 수 있는 React/Vite 프론트와 Supabase DB + Edge 
 구성도는 아래와 같습니다.
 
 ```text
-GitHub Pages (React build: index.html / admin.html)
+GitHub Pages (React/Vite SPA)
   -> public config.js
   -> Supabase anon key로 read
   -> verify-admin-password Edge Function 호출
@@ -46,21 +46,32 @@ Supabase
 
 ## 3. 페이지 구성 설명
 
-### `index.html`
+### `/`
 
-- 보기 전용 페이지
-- 서비스 제목 / 설명
+- 홈페이지 허브
+- 리그 순위표 / 리그토너먼트 / 관리자 이동 버튼 제공
+
+### `/league`
+
+- 리그 순위표 보기 전용 페이지
 - 진행 현황 카드
 - 경기 교차표
 - 대진 순서 이미지
 - 순위표
 - 수정 UI 미노출
 
-### `admin.html`
+### `/admin`
 
-- 관리자 전용 페이지
+- 관리자 허브
 - 인증 전: 잠금 화면 + 비밀번호 입력
-- 인증 후:
+- 인증 후 리그순위표 관리 / 리그토너먼트 관리 선택
+- 로그아웃
+
+### `/admin/league`
+
+- 리그 순위표 관리자 페이지
+- `/admin`과 동일한 관리자 세션 사용
+- 기능:
   - 팀 등록
   - 팀 삭제(경기 생성 전까지만)
   - 경기 생성
@@ -70,29 +81,47 @@ Supabase
   - 진행 현황 / 경기 교차표 / 순위표
   - 로그아웃
 
+### `/league-tournament`
+
+- 리그토너먼트 보기 전용 페이지
+- 최신 운영표의 대회명, 진행단계, 조편성, 예선결과, 조순위, 본선대진, 최종순위 표시
+- 점수 입력, 운영표 생성, 저장 UI 미노출
+
+### `/admin/league-tournament`
+
+- 리그토너먼트 관리자 페이지
+- `/admin`과 동일한 관리자 세션 사용
+- 운영표 생성, 예선 점수 입력, 본선 결과 반영 가능
+
 ## 4. 파일 구조
 
 ```text
 /
   index.html
-  admin.html
   package.json
   vite.config.js
-  style.css
   public/
     config.js
     .nojekyll
   src/
-    admin.jsx
-    viewer.jsx
-    components.jsx
-    league.js
-    supabaseClient.js
+    app/
+      App.jsx
+      router.js
+    features/
+      league-tournament/
+    legacy/
+      app.js
+      admin.js
+      viewer.js
+      supabase-client.js
+    pages/
+      admin/
+      league-tournament/
+      viewer/
+    shared/
+    styles/
+      global.css
   config.example.js
-  app.js
-  admin.js
-  viewer.js
-  supabase-client.js
   .github/
     workflows/
       deploy.yml
@@ -245,6 +274,7 @@ supabase functions deploy admin-api
 - `update_match`
 - `clear_match`
 - `reset_data`
+- `reset_league_tournaments`
 
 모든 action은 `x-admin-token` 헤더를 검증한 뒤에만 실행됩니다.
 
@@ -267,7 +297,7 @@ supabase functions deploy admin-api
 
 읽기:
 
-- `index.html`과 `admin.html` 모두 anon key로 `teams`, `matches` 조회 가능
+- `/league`와 `/admin/league` 모두 anon key로 `teams`, `matches` 조회 가능
 - 대진 순서 이미지는 public bucket URL로 조회 가능
 
 쓰기:
@@ -283,7 +313,7 @@ supabase functions deploy admin-api
 
 ## 12. 순위 계산 방식
 
-클라이언트의 [app.js](/mnt/c/Users/USER/Desktop/FE/30s_Leaderboard/app.js)는 기존 순위 계산 구조를 유지합니다.
+클라이언트의 [app.js](/mnt/c/Users/USER/Desktop/FE/30s_Leaderboard/src/legacy/app.js)는 기존 순위 계산 구조를 유지합니다.
 
 집계 대상:
 
@@ -312,12 +342,16 @@ supabase functions deploy admin-api
 3. GitHub 저장소의 `Settings -> Pages`로 이동합니다.
 4. `Deploy from a branch`를 선택합니다.
 5. 브랜치와 `/ (root)`를 선택합니다.
-6. 배포 후 `index.html`은 보기 전용, `admin.html`은 관리자 전용 URL로 사용합니다.
+6. 배포 후 `/`은 홈페이지 허브, `/league`는 리그 순위표 보기, `/league-tournament`는 리그토너먼트 보기, `/admin`은 관리자 허브, `/admin/league`와 `/admin/league-tournament`는 관리자 URL로 사용합니다.
 
 예시:
 
 - `https://YOUR_NAME.github.io/REPO_NAME/`
-- `https://YOUR_NAME.github.io/REPO_NAME/admin.html`
+- `https://YOUR_NAME.github.io/REPO_NAME/league`
+- `https://YOUR_NAME.github.io/REPO_NAME/admin`
+- `https://YOUR_NAME.github.io/REPO_NAME/admin/league`
+- `https://YOUR_NAME.github.io/REPO_NAME/league-tournament`
+- `https://YOUR_NAME.github.io/REPO_NAME/admin/league-tournament`
 
 ## 14. 보안 주의사항
 

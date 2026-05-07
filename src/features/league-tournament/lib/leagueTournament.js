@@ -52,6 +52,8 @@
  *   | "W_QF2"
  *   | "W_SF1"
  *   | "W_SF2"
+ *   | "L_SF1"
+ *   | "L_SF2"
  *   | "TBD"
  * } TournamentSlot
  *
@@ -358,6 +360,16 @@ export function generateSixTeamTournamentBracket(groupAStandings, groupBStanding
       team2: null,
       nextMatchId: null,
     }),
+    createTournamentMatch({
+      id: "third-place",
+      round: "final",
+      name: "3·4위전",
+      team1Slot: "L_SF1",
+      team2Slot: "L_SF2",
+      team1: null,
+      team2: null,
+      nextMatchId: null,
+    }),
   ];
 }
 
@@ -386,6 +398,8 @@ export function updateTournamentWinner(matches, matchId, team1Score, team2Score)
 
   const previousWinnerTeamId = targetMatch.winnerTeamId;
   const winner = team1Score > team2Score ? targetMatch.team1 : targetMatch.team2;
+  const loser = team1Score > team2Score ? targetMatch.team2 : targetMatch.team1;
+  const previousLoserTeamId = getCompletedLoser(targetMatch)?.id || null;
 
   targetMatch.team1Score = team1Score;
   targetMatch.team2Score = team2Score;
@@ -395,6 +409,8 @@ export function updateTournamentWinner(matches, matchId, team1Score, team2Score)
   if (targetMatch.nextMatchId) {
     propagateWinnerToNextMatch(matchMap, targetMatch, winner, previousWinnerTeamId !== winner.id);
   }
+
+  propagateLoserToThirdPlace(matchMap, targetMatch, loser, previousLoserTeamId !== loser.id);
 
   return nextMatches;
 }
@@ -430,6 +446,26 @@ export function findChampion(matches) {
   }
 
   return [finalMatch.team1, finalMatch.team2].find((team) => team?.id === finalMatch.winnerTeamId) || null;
+}
+
+export function calculateFinalRankings(matches) {
+  const finalMatch = matches.find((match) => match.id === "final");
+  const thirdPlaceMatch = matches.find((match) => match.id === "third-place");
+  const finalWinner = getCompletedWinner(finalMatch);
+  const finalLoser = getCompletedLoser(finalMatch);
+  const thirdPlaceWinner = getCompletedWinner(thirdPlaceMatch);
+  const thirdPlaceLoser = getCompletedLoser(thirdPlaceMatch);
+
+  return [
+    { rank: 1, label: "1위", team: finalWinner },
+    { rank: 2, label: "2위", team: finalLoser },
+    { rank: 3, label: "3위", team: thirdPlaceWinner },
+    { rank: 4, label: "4위", team: thirdPlaceLoser },
+  ];
+}
+
+export function areFinalRankingsComplete(matches) {
+  return calculateFinalRankings(matches).every((row) => row.team);
 }
 
 function createTournamentMatch({
@@ -543,13 +579,43 @@ function propagateWinnerToNextMatch(matchMap, sourceMatch, winner, shouldClearDo
   nextMatch[targetSide] = winner;
 }
 
+function propagateLoserToThirdPlace(matchMap, sourceMatch, loser, shouldClearDownstream) {
+  const targetSide = getThirdPlaceMatchTargetSide(sourceMatch.id);
+
+  if (!targetSide) {
+    return;
+  }
+
+  const thirdPlaceMatch = matchMap.get("third-place");
+
+  if (!thirdPlaceMatch) {
+    return;
+  }
+
+  if (shouldClearDownstream) {
+    clearMatchResultAndDownstream(matchMap, thirdPlaceMatch);
+  }
+
+  thirdPlaceMatch[targetSide] = loser;
+}
+
 function clearMatchResultAndDownstream(matchMap, match) {
   const oldWinnerTeamId = match.winnerTeamId;
+  const thirdPlaceTargetSide = getThirdPlaceMatchTargetSide(match.id);
 
   match.team1Score = null;
   match.team2Score = null;
   match.winnerTeamId = null;
   match.status = "pending";
+
+  if (thirdPlaceTargetSide) {
+    const thirdPlaceMatch = matchMap.get("third-place");
+
+    if (thirdPlaceMatch) {
+      thirdPlaceMatch[thirdPlaceTargetSide] = null;
+      clearMatchResultAndDownstream(matchMap, thirdPlaceMatch);
+    }
+  }
 
   if (!match.nextMatchId || !oldWinnerTeamId) {
     return;
@@ -573,4 +639,27 @@ function getNextMatchTargetSide(matchId) {
     "sf-1": "team1",
     "sf-2": "team2",
   }[matchId] || null;
+}
+
+function getThirdPlaceMatchTargetSide(matchId) {
+  return {
+    "sf-1": "team1",
+    "sf-2": "team2",
+  }[matchId] || null;
+}
+
+function getCompletedWinner(match) {
+  if (!match || match.status !== "completed" || !match.winnerTeamId) {
+    return null;
+  }
+
+  return [match.team1, match.team2].find((team) => team?.id === match.winnerTeamId) || null;
+}
+
+function getCompletedLoser(match) {
+  if (!match || match.status !== "completed" || !match.winnerTeamId) {
+    return null;
+  }
+
+  return [match.team1, match.team2].find((team) => team && team.id !== match.winnerTeamId) || null;
 }

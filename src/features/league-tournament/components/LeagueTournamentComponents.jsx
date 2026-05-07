@@ -145,10 +145,12 @@ export function PreliminaryGroups({
 
 export function PreliminaryMatchList({
   defaultOpen = true,
+  disabled = false,
   groups,
   matches,
   message,
-  onScoreChange,
+  onSaveScore,
+  readOnly = false,
   resetKey,
   statusLabel,
   statusTone,
@@ -184,14 +186,20 @@ export function PreliminaryMatchList({
                         {formatTeamPlayers(match.team1)} / {formatTeamPlayers(match.team2)}
                       </span>
                     </div>
-                    <ScoreInputs
-                      label1={match.team1.name}
-                      label2={match.team2.name}
-                      score1={match.team1Score}
-                      score2={match.team2Score}
-                      onScore1Change={(value) => onScoreChange(match.id, "team1Score", value)}
-                      onScore2Change={(value) => onScoreChange(match.id, "team2Score", value)}
-                    />
+                    {readOnly ? (
+                      <ScoreDisplay
+                        label1={match.team1.name}
+                        label2={match.team2.name}
+                        score1={match.team1Score}
+                        score2={match.team2Score}
+                      />
+                    ) : (
+                      <MatchScoreForm
+                        disabled={disabled}
+                        match={match}
+                        onSaveScore={onSaveScore}
+                      />
+                    )}
                     <MatchResultBadge match={match} />
                   </article>
                 ))}
@@ -207,6 +215,7 @@ export function PreliminaryMatchList({
 export function GroupStandingsTable({
   defaultOpen = true,
   group,
+  panelClassName,
   resetKey,
   standings,
   statusLabel,
@@ -217,6 +226,7 @@ export function GroupStandingsTable({
       defaultOpen={defaultOpen}
       headingId={`standings-${group.id}-heading`}
       kicker="Standings"
+      panelClassName={panelClassName}
       resetKey={resetKey}
       statusLabel={statusLabel}
       statusTone={statusTone}
@@ -264,6 +274,7 @@ export function SixTeamTournamentBracket({
   message,
   matches,
   onSaveScore,
+  readOnly = false,
   resetKey,
   standingsReady,
   statusLabel,
@@ -274,9 +285,26 @@ export function SixTeamTournamentBracket({
   }
 
   const roundGroups = [
-    { id: "quarterfinal", title: "6강" },
-    { id: "semifinal", title: "4강" },
-    { id: "final", title: "결승" },
+    {
+      id: "quarterfinal",
+      title: "6강",
+      matches: matches.filter((match) => match.round === "quarterfinal"),
+    },
+    {
+      id: "semifinal",
+      title: "4강",
+      matches: matches.filter((match) => match.round === "semifinal"),
+    },
+    {
+      id: "final",
+      title: "결승",
+      matches: matches.filter((match) => match.id === "final"),
+    },
+    {
+      id: "third-place",
+      title: "3·4위전",
+      matches: matches.filter((match) => match.id === "third-place"),
+    },
   ];
 
   return (
@@ -295,15 +323,14 @@ export function SixTeamTournamentBracket({
         {roundGroups.map((round) => (
           <div className="league-round-column" key={round.id}>
             <h3>{round.title}</h3>
-            {matches
-              .filter((match) => match.round === round.id)
-              .map((match) => (
-                <TournamentMatchCard
-                  key={match.id}
-                  match={match}
-                  onSaveScore={onSaveScore}
-                />
-              ))}
+            {round.matches.map((match) => (
+              <TournamentMatchCard
+                key={match.id}
+                match={match}
+                onSaveScore={onSaveScore}
+                readOnly={readOnly}
+              />
+            ))}
           </div>
         ))}
       </div>
@@ -314,6 +341,7 @@ export function SixTeamTournamentBracket({
 
 export function WorkflowProgress({
   champion,
+  finalRankingsComplete,
   flowStep,
   hasGeneratedTournament,
   hasTiebreakReview,
@@ -346,13 +374,13 @@ export function WorkflowProgress({
         tournamentTotalCount > 0
           ? `${tournamentCompletedCount}/${tournamentTotalCount} 경기`
           : "대기",
-      state: !standingsReady ? "pending" : champion ? "done" : "current",
+      state: !standingsReady ? "pending" : finalRankingsComplete ? "done" : "current",
     },
     {
       id: "complete",
-      label: "우승",
-      detail: champion ? champion.name : "미정",
-      state: champion ? "done" : "pending",
+      label: "최종 순위",
+      detail: finalRankingsComplete ? "1~4위 확정" : champion ? "결승 완료" : "미정",
+      state: finalRankingsComplete ? "done" : "pending",
     },
   ];
 
@@ -363,7 +391,9 @@ export function WorkflowProgress({
           <p className="section-kicker">Progress</p>
           <h2 id="workflow-heading">진행 단계</h2>
         </div>
-        <p className="section-description">{getNextActionText(flowStep, hasTiebreakReview, champion)}</p>
+        <p className="section-description">
+          {getNextActionText(flowStep, hasTiebreakReview, champion, finalRankingsComplete)}
+        </p>
       </div>
 
       <ol className="workflow-steps" aria-label="대회 진행 단계">
@@ -402,7 +432,38 @@ export function ChampionCard({ champion }) {
   );
 }
 
-function TournamentMatchCard({ match, onSaveScore }) {
+export function FinalRankingsPanel({ rankings }) {
+  if (!Array.isArray(rankings) || rankings.length === 0) {
+    return null;
+  }
+
+  const isComplete = rankings.every((row) => row.team);
+
+  return (
+    <section className="panel wide-panel final-rankings-panel" aria-labelledby="final-rankings-heading">
+      <div className="section-header">
+        <div>
+          <p className="section-kicker">Results</p>
+          <h2 id="final-rankings-heading">최종 순위</h2>
+        </div>
+        <p className="section-description">{isComplete ? "1~4위 확정" : "결승과 3·4위전 결과 입력 대기"}</p>
+      </div>
+      <ol className="final-ranking-list" aria-label="최종 1위부터 4위 순위">
+        {rankings.map((row) => (
+          <li className="final-ranking-item" data-rank={row.rank} key={row.rank}>
+            <span className="final-ranking-rank">{row.label}</span>
+            <span className="final-ranking-team">
+              <strong>{row.team ? row.team.name : "미정"}</strong>
+              <span>{row.team ? formatTeamPlayers(row.team) : "경기 결과 입력 후 확정"}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function TournamentMatchCard({ match, onSaveScore, readOnly }) {
   const winner = [match.team1, match.team2].find((team) => team?.id === match.winnerTeamId);
   const canInputScore = Boolean(match.team1 && match.team2);
 
@@ -418,11 +479,20 @@ function TournamentMatchCard({ match, onSaveScore }) {
         <TeamSlot team={match.team2} slot={match.team2Slot} />
       </div>
 
-      <TournamentScoreForm
-        disabled={!canInputScore}
-        match={match}
-        onSaveScore={onSaveScore}
-      />
+      {readOnly ? (
+        <ScoreDisplay
+          label1={formatSlotTeam(match.team1, match.team1Slot)}
+          label2={formatSlotTeam(match.team2, match.team2Slot)}
+          score1={match.team1Score}
+          score2={match.team2Score}
+        />
+      ) : (
+        <MatchScoreForm
+          disabled={!canInputScore}
+          match={match}
+          onSaveScore={onSaveScore}
+        />
+      )}
 
       <div className="league-result-stack">
         <span className={`match-badge ${match.status === "completed" ? "played" : "pending"}`}>
@@ -445,6 +515,7 @@ function CollapsiblePanel({
   description = "",
   headingId,
   kicker,
+  panelClassName = "wide-panel",
   resetKey,
   statusLabel,
   statusTone = "neutral",
@@ -458,7 +529,7 @@ function CollapsiblePanel({
   }, [defaultOpen, resetKey]);
 
   return (
-    <section className={`panel wide-panel collapsible-panel ${isOpen ? "open" : "closed"}`}>
+    <section className={`panel ${panelClassName} collapsible-panel ${isOpen ? "open" : "closed"}`}>
       <button
         aria-controls={`${headingId}-body`}
         aria-expanded={isOpen}
@@ -495,7 +566,7 @@ function CollapsiblePanel({
   );
 }
 
-function TournamentScoreForm({ disabled, match, onSaveScore }) {
+function MatchScoreForm({ disabled, match, onSaveScore }) {
   const [score1, setScore1] = useState(formatScoreValue(match.team1Score));
   const [score2, setScore2] = useState(formatScoreValue(match.team2Score));
 
@@ -571,6 +642,18 @@ function ScoreInputs({
   );
 }
 
+function ScoreDisplay({ label1, label2, score1, score2 }) {
+  return (
+    <div className="league-score-display" aria-label={`${label1} 대 ${label2} 점수`}>
+      <span className="league-score-display-team">{label1}</span>
+      <strong className="league-score-display-value">
+        {formatScoreValue(score1) || "-"} : {formatScoreValue(score2) || "-"}
+      </strong>
+      <span className="league-score-display-team">{label2}</span>
+    </div>
+  );
+}
+
 function MatchResultBadge({ match }) {
   const winner = [match.team1, match.team2].find((team) => team.id === match.winnerTeamId);
 
@@ -641,8 +724,8 @@ function formatTournamentSummary(matches, standingsReady) {
   return `${completedCount}/${matches.length} 경기 입력 완료`;
 }
 
-function getNextActionText(flowStep, hasTiebreakReview, champion) {
-  if (champion) {
+function getNextActionText(flowStep, hasTiebreakReview, champion, finalRankingsComplete) {
+  if (finalRankingsComplete && champion) {
     return `${champion.name} 우승 확정`;
   }
 
@@ -659,7 +742,9 @@ function getNextActionText(flowStep, hasTiebreakReview, champion) {
   }
 
   if (flowStep === "tournament") {
-    return "본선 점수를 입력하면 다음 라운드가 자동 반영됩니다.";
+    return champion
+      ? "3·4위전 점수를 입력하면 최종 1~4위가 확정됩니다."
+      : "본선 점수를 입력하면 다음 라운드가 자동 반영됩니다.";
   }
 
   return "대회 진행 상태를 확인하세요.";
@@ -670,7 +755,11 @@ function formatNextRoundStatus(match) {
     return "대기";
   }
 
-  return match.nextMatchId ? "반영 완료" : "우승 확정";
+  if (match.nextMatchId) {
+    return "반영 완료";
+  }
+
+  return match.id === "third-place" ? "3·4위 확정" : "순위 확정";
 }
 
 function formatSlotTeam(team, slot) {
@@ -689,6 +778,8 @@ function slotLabel(slot) {
     W_QF2: "6강 2경기 승자",
     W_SF1: "4강 1경기 승자",
     W_SF2: "4강 2경기 승자",
+    L_SF1: "4강 1경기 패자",
+    L_SF2: "4강 2경기 패자",
     TBD: "미정",
   }[slot] || "미정";
 }
